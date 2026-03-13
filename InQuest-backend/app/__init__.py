@@ -1,1 +1,0 @@
-"""InQuest Mobility Service Backend"""
