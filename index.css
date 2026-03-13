@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #1A2421;
+  --color-surface-1: #1F2D29;
+  --color-surface-2: #243330;
+  --color-surface-3: #2A3D38;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #E8EBE9;
+  --color-text-muted: #8A9E9A;
+  --color-primary: #7FFF00;
+  --color-primary-text: #000000;
+  --color-border: rgba(127,255,0,0.1);
+  --color-border-subtle: rgba(255,255,255,0.05);
+  --color-shadow: rgba(0,0,0,0.4);
+  --color-overlay: rgba(10,18,15,0.85);
+  --color-error: #EF4444;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-glow: rgba(127,255,0,0.39);
+}
+
+:root[data-theme="light"] {
+  --color-bg: #F8FAF9;
+  --color-surface-1: #FFFFFF;
+  --color-surface-2: #F1F4F2;
+  --color-surface-3: #E8EDE9;
+  --color-text-primary: #1A2421;
+  --color-text-secondary: #4A5D59;
+  --color-text-muted: #8A9E9A;
+  --color-primary: #7FFF00;
+  --color-primary-text: #000000;
+  --color-border: rgba(0,0,0,0.05);
+  --color-border-subtle: rgba(0,0,0,0.03);
+  --color-shadow: rgba(26,36,33,0.08);
+  --color-overlay: rgba(248,250,249,0.85);
+  --color-error: #EF4444;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-glow: rgba(127,255,0,0.25);
+}
+
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 20px; --space-6: 24px;
+  --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --radius-xl: 20px; --radius-2xl: 28px; --radius-pill: 9999px;
+
+  --shadow-sm: 0 1px 4px var(--color-shadow);
+  --shadow-md: 0 4px 16px var(--color-shadow);
+  --shadow-lg: 0 12px 32px var(--color-shadow);
+  --shadow-glow: 0 4px 14px 0 var(--color-glow);
+
+  --transition-fast: 180ms cubic-bezier(0.4,0,0.2,1);
+  --transition-normal: 260ms cubic-bezier(0.4,0,0.2,1);
+  --transition-spring: 380ms cubic-bezier(0.34,1.56,0.64,1);
+
+  --z-map: 1;
+  --z-map-controls: 10;
+  --z-sheet: 100;
+  --z-floating: 150;
+  --z-overlay: 200;
+  --z-sos: 300;
+  --z-toast: 400;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: var(--font-display);
+}
+
+/* Global focus styles */
+input:focus, input:focus-visible, textarea:focus, textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 12px var(--color-glow);
+  border-color: var(--color-primary);
+}
+
+/* Hide scrollbar for clean UI */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Leaflet dark mode overrides */
+.leaflet-container {
+  background: var(--color-bg) !important;
+  font-family: var(--font-sans) !important;
+}
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+@keyframes marker-pulse {
+  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(127, 255, 0, 0.4); }
+  70% { transform: scale(1.1); opacity: 0.8; box-shadow: 0 0 0 15px rgba(127, 255, 0, 0); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(127, 255, 0, 0); }
+}
+
+.keke-pulse {
+  animation: marker-pulse 1.5s infinite;
+}
