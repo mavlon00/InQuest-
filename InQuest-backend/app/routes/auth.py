@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services.auth_service import AuthService
 from app.schemas.auth import (
-    PhoneNumberRequest,
-    OTPVerificationRequest,
+    RegisterRequest,
+    VerifyOTPRequest,
     ResendOTPRequest,
+    LoginRequest,
     ProfileUpdateRequest,
     UserResponse,
     AuthTokenResponse,
@@ -78,7 +79,7 @@ def get_current_user_id(authorization: str = Header(...)) -> int:
     },
 )
 async def register(
-    request: PhoneNumberRequest,
+    request: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
     """
@@ -101,7 +102,7 @@ async def register(
         }
     """
     try:
-        result = await AuthService.register_or_login(db, request.phone_number)
+        result = await AuthService.register_or_login(db, request.phone)
         return StandardResponse(message="OTP sent successfully", data=result)
     except InQuestException as e:
         logger.warning("Registration failed", error=e.message, code=e.code)
@@ -127,7 +128,7 @@ async def register(
     },
 )
 async def login(
-    request: PhoneNumberRequest,
+    request: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
     """
@@ -141,7 +142,7 @@ async def login(
         Success response with OTP status.
     """
     try:
-        result = await AuthService.register_or_login(db, request.phone_number)
+        result = await AuthService.register_or_login(db, request.phone)
         return StandardResponse(message="OTP sent successfully", data=result)
     except InQuestException as e:
         logger.warning("Login failed", error=e.message)
@@ -167,7 +168,7 @@ async def login(
     },
 )
 async def verify_otp(
-    request: OTPVerificationRequest,
+    request: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
     """
@@ -194,7 +195,7 @@ async def verify_otp(
     """
     try:
         result = await AuthService.verify_otp_and_login(
-            db, request.phone_number, request.otp
+            db, request.phone, request.otp
         )
         return StandardResponse(
             message="Authentication successful",
@@ -205,7 +206,7 @@ async def verify_otp(
             "OTP verification failed",
             error=e.message,
             code=e.code,
-            phone=request.phone_number,
+            phone=request.phone,
         )
         raise
     except Exception as e:
@@ -241,7 +242,7 @@ async def resend_otp(
         Success response.
     """
     try:
-        result = await AuthService.resend_otp(db, request.phone_number)
+        result = await AuthService.resend_otp(db, request.phone)
         return StandardResponse(message="OTP resent successfully", data=result)
     except InQuestException as e:
         logger.warning("OTP resend failed", error=e.message)

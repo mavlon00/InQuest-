@@ -1,82 +1,92 @@
 """
 User and authentication-related database models.
 
-This module defines the User, OTP, and JWT blacklist models for authentication.
-All models use SQLAlchemy 2.0+ with proper type hints and relationships.
+This module defines the User model and related authentication models for the passenger app.
+All models use SQLAlchemy 2.0+ with proper type hints and relationships, following the spec.
 """
 
 from datetime import datetime
+from decimal import Decimal
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Enum
 import enum
+import uuid
 from app.database import Base
 
 
-class UserRole(str, enum.Enum):
-    """Enum for user roles in the system."""
-    PASSENGER = "Passenger"
-    DRIVER = "Driver"
-    ADMIN = "Admin"
-    SUPPORT = "Support"
+class MembershipTier(str, enum.Enum):
+    """Enum for user membership tiers."""
+    STANDARD = "Standard"
+    SILVER = "Silver"
+    GOLD = "Gold"
+    PLATINUM = "Platinum"
 
 
 class User(Base):
     """
-    User model representing both passengers and drivers.
+    User model for passengers in the InQuest system.
+    Phone-based authentication, referenced by all user activities.
     
     Attributes:
-        id: Unique user identifier.
-        phone_number: International format phone number (unique, indexed).
+        id: UUID primary key.
+        phone: Nigerian phone number in +234 format (unique, indexed).
         first_name: User's first name.
         last_name: User's last name.
-        email: User's email address (optional).
-        photo_url: URL to user's profile photo (optional).
-        role: User role (Passenger, Driver, Admin, Support).
-        is_active: Whether the account is active.
-        is_verified: Whether the phone number is verified.
-        emergency_contact: Emergency contact phone number (optional).
-        created_at: Account creation timestamp.
-        updated_at: Last update timestamp.
-        last_login_at: Last login timestamp.
+        email: User's email (optional, unique).
+        profile_photo_url: CDN URL to profile photo.
+        referral_code: 6-char unique code for referrals.
+        referred_by_id: FK to user who referred this user.
+        membership_tier: Current tier (Standard/Silver/Gold/Platinum).
+        total_trips: Denormalized counter for tier calculations.
+        rating: Average passenger rating (1-5).
+        pin_hash: Bcrypt hash of 4-digit transaction PIN.
+        deleted_at: Soft delete timestamp.
+        created_at: Account creation time.
+        updated_at: Last update time.
         relationships:
-            rides_as_passenger: Rides where user is the passenger.
-            rides_as_driver: Rides where user is the driver.
-            wallet: User's wallet account.
-            driver_profile: Driver-specific profile (if user is a driver).
+            trips: All trips as passenger.
+            wallet: Wallet account.
+            guardians: Emergency contacts.
+            saved_places: Saved locations.
+            recurring_bookings: Scheduled rides.
     """
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    phone_number: Mapped[str] = mapped_column(
-        sa.String(20), unique=True, index=True, nullable=False
-    )
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    phone: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True, nullable=False)
     first_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     email: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
-    photo_url: Mapped[str | None] = mapped_column(sa.String(500), nullable=True)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole), default=UserRole.PASSENGER, nullable=False
+    profile_photo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    
+    # Referral system
+    referral_code: Mapped[str] = mapped_column(sa.String(10), unique=True, nullable=False)
+    referred_by_id: Mapped[str | None] = mapped_column(sa.String(36), sa.ForeignKey("users.id"), nullable=True)
+    
+    # Membership and rating
+    membership_tier: Mapped[MembershipTier] = mapped_column(
+        Enum(MembershipTier), default=MembershipTier.STANDARD, nullable=False
     )
-    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
-    emergency_contact: Mapped[str | None] = mapped_column(
-        sa.String(20), nullable=True
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, nullable=False
-    )
+    total_trips: Mapped[int] = mapped_column(default=0, nullable=False)
+    rating: Mapped[Decimal | None] = mapped_column(sa.DECIMAL(3, 2), nullable=True)
+    
+    # Security
+    pin_hash: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    
+    # Soft delete
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
-    last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
-    rides_as_passenger: Mapped[list["Ride"]] = relationship(
-        "Ride",
-        foreign_keys="Ride.passenger_id",
+    trips: Mapped[list["Trip"]] = relationship(
+        "Trip",
+        foreign_keys="Trip.passenger_id",
         back_populates="passenger",
         cascade="all, delete-orphan",
     )

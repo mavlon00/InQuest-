@@ -8,7 +8,7 @@ All operations are asynchronous and integrated with the database.
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.user import User, OTP, UserRole
+from app.models.user import User  # OTP and UserRole removed - will be reimplemented in Phase 3
 from app.utils.security import create_access_token, extract_user_id_from_token, hash_password, verify_password
 from app.utils.validators import validate_phone_number
 from app.utils.otp import send_otp, generate_otp, is_otp_expired

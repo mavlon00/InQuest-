@@ -1,168 +1,90 @@
 """
-Authentication-related Pydantic schemas for API requests and responses.
+Authentication request/response schemas.
 
-These schemas define the structure of authentication endpoint payloads
-and provide automatic validation and documentation.
+Pydantic models for all authentication endpoints per specification.
 """
 
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
 
-class PhoneNumberRequest(BaseModel):
+class RegisterRequest(BaseModel):
     """
-    Request schema for phone number-based authentication.
+    Request body for POST /api/v1/auth/register
     
-    Used for /register and /login endpoints.
+    Spec: Section 1.1 - Register
     """
-
-    phone_number: str = Field(
-        ...,
-        description="Phone number in international format (e.g., +2341234567890 or 2341234567890)",
-        example="+2341234567890",
-    )
-
-    @validator("phone_number")
-    def validate_phone(cls, v: str) -> str:
-        """validate phone number format"""
-        from app.utils.validators import validate_phone_number
-        return validate_phone_number(v)
-
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {"phone_number": "+2341234567890"}
-        }
+    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Nigerian phone in +234 format")
+    first_name: Optional[str] = Field(None, min_length=2, max_length=100, description="User's first name")
+    last_name: Optional[str] = Field(None, min_length=2, max_length=100, description="User's last name")
+    referral_code: Optional[str] = Field(None, description="Optional referral code")
 
 
-class OTPVerificationRequest(BaseModel):
+class LoginRequest(BaseModel):
     """
-    Request schema for OTP verification.
+    Request body for POST /api/v1/auth/login
     
-    Used for /verify-otp endpoint.
+    Spec: Section 1.4 - Login
     """
+    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Registered phone number")
 
-    phone_number: str = Field(
-        ...,
-        description="Phone number",
-        example="+2341234567890",
-    )
-    otp: str = Field(
-        ...,
-        description="6-digit OTP code",
-        example="123456",
-    )
 
-    @validator("phone_number")
-    def validate_phone(cls, v: str) -> str:
-        """Validate phone number"""
-        from app.utils.validators import validate_phone_number
-        return validate_phone_number(v)
-
-    @validator("otp")
-    def validate_otp(cls, v: str) -> str:
-        """Validate OTP format"""
-        from app.utils.validators import validate_otp
-        return validate_otp(v)
-
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {
-                "phone_number": "+2341234567890",
-                "otp": "123456",
-            }
-        }
+class VerifyOTPRequest(BaseModel):
+    """
+    Request body for POST /api/v1/auth/verify-otp
+    
+    Spec: Section 1.2 - Verify OTP
+    """
+    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone that received OTP")
+    otp: str = Field(..., pattern=r"^\d{6}$", description="6-digit OTP code")
 
 
 class ResendOTPRequest(BaseModel):
-    """Request schema for resending OTP."""
-
-    phone_number: str = Field(
-        ...,
-        description="Phone number to resend OTP to",
-        example="+2341234567890",
-    )
-
-    @validator("phone_number")
-    def validate_phone(cls, v: str) -> str:
-        """Validate phone number"""
-        from app.utils.validators import validate_phone_number
-        return validate_phone_number(v)
-
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {"phone_number": "+2341234567890"}
-        }
+    """
+    Request body for POST /api/v1/auth/resend-otp
+    
+    Spec: Section 1.3 - Resend OTP
+    """
+    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone number that needs OTP resent")
 
 
-class AuthTokenResponse(BaseModel):
-    """Response schema containing JWT token after successful authentication."""
-
-    access_token: str = Field(
-        ...,
-        description="JWT access token for authenticated requests",
-    )
-    token_type: str = Field(
-        default="bearer",
-        description="Token type (always 'bearer' for JWT)",
-    )
-    expires_in: int = Field(
-        ...,
-        description="Token expiration time in seconds",
-    )
-
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "token_type": "bearer",
-                "expires_in": 86400,
-            }
-        }
+class RefreshTokenRequest(BaseModel):
+    """
+    Request body for POST /api/v1/auth/refresh
+    
+    Spec: Section 1.5 - Refresh Token
+    """
+    refresh_token: str = Field(..., description="Valid refresh token")
 
 
-class UserBase(BaseModel):
-    """Base user schema with common fields."""
+class LogoutRequest(BaseModel):
+    """
+    Request body for POST /api/v1/auth/logout
+    
+    Spec: Section 1.6 - Logout
+    """
+    refresh_token: str = Field(..., description="Refresh token to invalidate")
+    device_token: Optional[str] = Field(None, description="FCM push token")
 
-    first_name: str = Field(
-        ...,
-        min_length=2,
-        max_length=100,
-        description="User's first name",
-    )
-    last_name: str = Field(
-        ...,
-        min_length=2,
-        max_length=100,
-        description="User's last name",
-    )
-    email: Optional[EmailStr] = Field(
-        None,
-        description="User's email address",
-    )
-    emergency_contact: Optional[str] = Field(
-        None,
-        description="Emergency contact phone number",
-    )
 
-    @validator("first_name", "last_name")
-    def validate_name(cls, v: str) -> str:
-        """Validate name format"""
-        from app.utils.validators import validate_name
-        return validate_name(v)
-
-    class Config:
-        """Pydantic configuration."""
-        from_attributes = True
+class DeleteAccountRequest(BaseModel):
+    """
+    Request body for DELETE /api/v1/auth/account
+    
+    Spec: Section 1.7 - Delete Account
+    """
+    pin: str = Field(..., pattern=r"^\d{4}$", description="4-digit transaction PIN")
+    reason: Optional[str] = Field(None, description="Deletion reason")
+    refund_account: Optional[str] = Field(None, description="Bank account for refund")
 
 
 class ProfileUpdateRequest(BaseModel):
-    """Request schema for updating user profile."""
-
+    """
+    Request body for PUT /api/v1/profile
+    
+    Spec: Section 2.2 - Update Profile
+    """
     first_name: Optional[str] = Field(
         None,
         min_length=2,
@@ -175,78 +97,59 @@ class ProfileUpdateRequest(BaseModel):
         max_length=100,
         description="User's last name",
     )
-    photo_url: Optional[str] = Field(
+    email: Optional[str] = Field(
+        None,
+        description="User's email address",
+    )
+    profile_photo_url: Optional[str] = Field(
         None,
         description="URL to profile photo",
     )
-    emergency_contact: Optional[str] = Field(
-        None,
-        description="Emergency contact phone number",
-    )
-
-    @validator("photo_url")
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
-        """Validate URL if provided"""
-        if v:
-            from app.utils.validators import validate_url
-            return validate_url(v)
-        return v
-
-    @validator("first_name", "last_name")
-    def validate_names(cls, v: Optional[str]) -> Optional[str]:
-        """Validate name if provided"""
-        if v:
-            from app.utils.validators import validate_name
-            return validate_name(v)
-        return v
-
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {
-                "first_name": "John",
-                "last_name": "Doe",
-                "photo_url": "https://example.com/photo.jpg",
-                "emergency_contact": "+2341234567890",
-            }
-        }
 
 
-class UserResponse(UserBase):
-    """Response schema for user data."""
-
-    id: int = Field(..., description="User ID")
-    phone_number: str = Field(..., description="User's phone number")
-    role: str = Field(..., description="User role (Passenger, Driver, Admin, Support)")
-    is_active: bool = Field(..., description="Whether account is active")
-    is_verified: bool = Field(..., description="Whether phone is verified")
-    created_at: datetime = Field(..., description="Account creation date")
-    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
+class UserResponse(BaseModel):
+    """User data in response objects."""
+    id: str = Field(..., description="User unique identifier")
+    phone: str = Field(..., description="User's phone number")
+    first_name: str = Field(..., description="User's first name")
+    last_name: str = Field(..., description="User's last name")
+    email: Optional[str] = Field(None, description="User's email")
+    profile_photo_url: Optional[str] = Field(None, description="Profile photo URL")
+    membership_tier: str = Field(..., description="Membership tier (Standard/Silver/Gold/Platinum)")
+    wallet_balance: float = Field(..., description="Current wallet balance")
+    green_points: int = Field(..., description="Green points balance")
+    referral_code: str = Field(..., description="User's unique referral code")
+    is_new_user: bool = Field(..., description="Whether this is a new user")
 
     class Config:
         """Pydantic configuration."""
         from_attributes = True
+
+
+class AuthTokenResponse(BaseModel):
+    """Response containing JWT token after successful authentication."""
+    access_token: str = Field(..., description="JWT access token")
+    token_type: str = Field(default="bearer", description="Token type (always 'bearer')")
+    expires_in: int = Field(..., description="Token expiration in seconds")
+    refresh_token: str = Field(..., description="Refresh token for token rotation")
+
+    class Config:
+        """Pydantic configuration."""
         json_schema_extra = {
             "example": {
-                "id": 1,
-                "phone_number": "+2341234567890",
-                "first_name": "John",
-                "last_name": "Doe",
-                "email": "john@example.com",
-                "role": "Passenger",
-                "is_active": True,
-                "is_verified": True,
-                "created_at": "2024-01-15T10:30:00",
-                "last_login_at": "2024-01-15T15:45:00",
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "expires_in": 900,
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
             }
         }
 
 
 class LoginResponse(BaseModel):
-    """Response schema for login endpoint combining token and user info."""
-
+    """Response for successful login/registration."""
     user: UserResponse = Field(..., description="User information")
     access_token: str = Field(..., description="JWT access token")
+    refresh_token: str = Field(..., description="JWT refresh token")
     token_type: str = Field(default="bearer", description="Token type")
     expires_in: int = Field(..., description="Token expiration in seconds")
 
@@ -255,17 +158,45 @@ class LoginResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "user": {
-                    "id": 1,
-                    "phone_number": "+2341234567890",
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "phone": "+2341234567890",
                     "first_name": "John",
                     "last_name": "Doe",
-                    "role": "Passenger",
-                    "is_active": True,
-                    "is_verified": True,
-                    "created_at": "2024-01-15T10:30:00",
+                    "email": None,
+                    "profile_photo_url": None,
+                    "membership_tier": "Standard",
+                    "wallet_balance": 0.0,
+                    "green_points": 0,
+                    "referral_code": "ABC123",
+                    "is_new_user": True,
                 },
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "expires_in": 86400,
+                "expires_in": 900,
             }
         }
+
+
+class StandardResponse(BaseModel):
+    """Standard API response envelope."""
+    success: bool = Field(..., description="Whether the request succeeded")
+    message: Optional[str] = Field(None, description="Human-readable message")
+    data: Optional[dict] = Field(None, description="Response data")
+    error: Optional[dict] = Field(None, description="Error details if failed")
+
+    class Config:
+        """Pydantic configuration."""
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Operation completed successfully",
+                "data": {}
+            }
+        }
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response."""
+    success: bool = Field(default=False, description="Always False for errors")
+    error: dict = Field(..., description="Error details with code and message")

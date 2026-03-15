@@ -15,23 +15,38 @@ from config import settings
 Base = declarative_base()
 
 # Create async SQLAlchemy engine with connection pooling
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.SQLALCHEMY_ECHO,
-    future=True,
-    pool_pre_ping=True,  # Test connections before using them
-    pool_size=20,  # Connection pool size
-    max_overflow=10,  # Maximum overflow connections
-)
+# NOTE: Engine creation is wrapped in lazy initialization to prevent hanging on startup
+engine = None
+
+def _get_engine():
+    """Lazy initialization of database engine."""
+    global engine
+    if engine is None:
+        engine = create_async_engine(
+            settings.DATABASE_URL,
+            echo=settings.SQLALCHEMY_ECHO,
+            future=True,
+            pool_pre_ping=True,  # Test connections before using them
+            pool_size=20,  # Connection pool size
+            max_overflow=10,  # Maximum overflow connections
+        )
+    return engine
 
 # Create async session factory
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+AsyncSessionLocal = None
+
+def _get_session_factory():
+    """Lazy initialization of session factory."""
+    global AsyncSessionLocal
+    if AsyncSessionLocal is None:
+        AsyncSessionLocal = async_sessionmaker(
+            _get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+            autocommit=False,
+        )
+    return AsyncSessionLocal
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -47,7 +62,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             result = await db.execute(select(Item))
             return result.scalars().all()
     """
-    async with AsyncSessionLocal() as session:
+    async with _get_session_factory()() as session:
         try:
             yield session
         finally:
