@@ -1,9 +1,10 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, useMap, Polyline, Popup } from 'react-leaflet';
-import { Search, Navigation, User, Star, MapPin, CheckCircle, X, ChevronLeft, ArrowRight, PersonStanding } from 'lucide-react';
+import { Search, Navigation, User, Star, MapPin, CheckCircle, X, ChevronLeft, ArrowRight, PersonStanding, Zap } from 'lucide-react';
 import { useStore } from '../../store';
+import useSubscriptionStore from '../../store/subscriptionStore';
 import L from 'leaflet';
 import MapControls from '../../components/MapControls';
 import DestinationAlarm from '../../components/DestinationAlarm';
@@ -16,16 +17,66 @@ const customMarkerIcon = new L.DivIcon({
   iconAnchor: [8, 8],
 });
 
-const kekeIcon = (filled, total) => new L.DivIcon({
-  className: 'keke-icon keke-pulse',
+const kekeIcon = (keke, isSelected) => new L.DivIcon({
+  className: 'keke-icon',
   html: `
-    <div style="position: relative; width: 32px; height: 32px; background-color: var(--color-surface-2); border-radius: 8px; border: 2px solid var(--color-border); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); border-radius: 8px;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
-      <div style="position: absolute; top: -6px; right: -6px; background-color: var(--color-primary); color: var(--color-primary-text); font-size: 10px; font-weight: bold; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-bg); transition: all 0.3s ease;">${filled}/${total}</div>
+    <div style="
+      transform: rotate(${keke.heading || 0}deg);
+      transition: all 0.5s ease-out;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    ">
+      <!-- Ground Shadow -->
+      <div style="
+        position: absolute;
+        width: 30px;
+        height: 18px;
+        background: rgba(0,0,0,0.3);
+        border-radius: 4px;
+        filter: blur(4px);
+        transform: translateY(2px);
+      "></div>
+      
+      <!-- Keke Body Silhouette -->
+      <svg width="40" height="40" viewBox="0 0 64 64" style="position: relative; z-index: 2;">
+        {/* Main chassis */}
+        <rect x="18" y="12" width="28" height="40" rx="6" fill="${isSelected ? 'var(--color-primary)' : '#2A2A2E'}" />
+        {/* Roof line */}
+        <rect x="22" y="16" width="20" height="30" rx="3" fill="rgba(255,255,255,0.15)" />
+        {/* Headlight glows */}
+        <rect x="24" y="6" width="6" height="4" rx="1" fill="${isSelected ? '#ADFF2F' : 'white'}" opacity="0.8" />
+        <rect x="34" y="6" width="6" height="4" rx="1" fill="${isSelected ? '#ADFF2F' : 'white'}" opacity="0.8" />
+        {/* Side bars */}
+        <rect x="16" y="20" width="4" height="24" rx="2" fill="#1A1A1E" />
+        <rect x="44" y="20" width="4" height="24" rx="2" fill="#1A1A1E" />
+      </svg>
+
+      <!-- Occupancy Badge -->
+      <div style="
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: ${keke.filled >= keke.total ? '#FF4B4B' : 'var(--color-primary)'};
+        color: black;
+        font-size: 9px;
+        font-weight: 900;
+        padding: 2px 4px;
+        border-radius: 5px;
+        border: 2px solid #071F18;
+        transform: rotate(${- (keke.heading || 0)}deg);
+        z-index: 10;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      ">
+        ${keke.filled}/${keke.total}
+      </div>
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
 });
 
 const getDistanceMeters = (lat1, lng1, lat2, lng2) => {
@@ -42,7 +93,7 @@ const getDistanceMeters = (lat1, lng1, lat2, lng2) => {
 
 const generateMockKekes = (passengerLat, passengerLng) => {
   const kekes = [];
-  const count = Math.floor(Math.random() * 5) + 4;
+  const count = 35; // Increased significantly for density
 
   for (let i = 0; i < count; i++) {
     const minOffset = 0.001;
@@ -90,13 +141,17 @@ export default function OnSpotBooking() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const { theme, booking, updateBooking, setCancelModalOpen } = useStore();
+  const { subscription, isSubscriptionUsable, fetchActiveSubscription } = useSubscriptionStore();
+
   const [location, setLocation] = useState(null);
-  const [selectedKeke, setSelectedKeke] = useState(null);
+  const [selectedKekeId, setSelectedKekeId] = useState(null);
   const [bookingState, setBookingState] = useState('PREVIEW');
   const [countdown, setCountdown] = useState(30);
   const [kekePositions, setKekePositions] = useState([]);
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
   const [activeAlarm, setActiveAlarm] = useState(null);
+  const [isSearchingDestination, setIsSearchingDestination] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const updateKekeDistances = useCallback((kekes, userLat, userLng) => {
     return kekes.map(keke => {
@@ -111,6 +166,7 @@ export default function OnSpotBooking() {
   }, []);
 
   useEffect(() => {
+    fetchActiveSubscription();
     // Real Geolocation
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -132,7 +188,7 @@ export default function OnSpotBooking() {
     );
 
     if (routerLocation.state?.selectedKeke) {
-      setSelectedKeke(routerLocation.state.selectedKeke);
+      setSelectedKekeId(routerLocation.state.selectedKeke.id);
     }
   }, [routerLocation.state, updateKekeDistances]);
 
@@ -143,11 +199,17 @@ export default function OnSpotBooking() {
     const interval = setInterval(() => {
       setKekePositions(prev => {
         const nextKekes = prev.map(keke => {
-          if (Math.random() > 0.7) {
+          if (Math.random() > 0.4) {
+            const latDiff = (Math.random() - 0.5) * 0.0004;
+            const lngDiff = (Math.random() - 0.5) * 0.0004;
+            // Calculate new heading in degrees
+            const newHeading = (Math.atan2(lngDiff, latDiff) * 180 / Math.PI) + 90;
+            
             return {
               ...keke,
-              lat: keke.lat + (Math.random() - 0.5) * 0.0002,
-              lng: keke.lng + (Math.random() - 0.5) * 0.0002
+              lat: keke.lat + latDiff,
+              lng: keke.lng + lngDiff,
+              heading: newHeading
             };
           }
           return keke;
@@ -201,10 +263,11 @@ export default function OnSpotBooking() {
         clearTimeout(acceptTimer);
       };
     }
-  }, [bookingState, updateBooking, navigate, selectedKeke]);
+  }, [bookingState, updateBooking, navigate, selectedKekeId]);
 
   const handleBook = () => {
-    if (selectedKeke && selectedKeke.withinGeofence) {
+    const liveKeke = kekePositions.find(k => k.id === selectedKekeId);
+    if (liveKeke && liveKeke.withinGeofence) {
       updateBooking({ status: 'REQUESTED' });
       setBookingState('REQUESTED');
     }
@@ -216,10 +279,11 @@ export default function OnSpotBooking() {
     } else {
       updateBooking({ status: 'IDLE' });
       setBookingState('PREVIEW');
-      setSelectedKeke(null);
+      setSelectedKekeId(null);
     }
   };
 
+  const selectedKeke = kekePositions.find(k => k.id === selectedKekeId);
   const nearbyCount = kekePositions.filter(k => k.withinGeofence).length;
 
   return (
@@ -241,9 +305,9 @@ export default function OnSpotBooking() {
                 <Marker
                   key={keke.id}
                   position={[keke.lat, keke.lng]}
-                  icon={kekeIcon(keke.filled, keke.total)}
+                  icon={kekeIcon(keke, selectedKekeId === keke.id)}
                   eventHandlers={{
-                    click: () => setSelectedKeke(keke)
+                    click: () => setSelectedKekeId(keke.id)
                   }}
                 >
                   {selectedKeke?.id === keke.id && (
@@ -293,12 +357,24 @@ export default function OnSpotBooking() {
             <ChevronLeft size={24} />
           </button>
 
-          <div className="flex-1 bg-[var(--color-surface-1)] border border-[var(--color-border-subtle)] rounded-full py-3 px-5 flex items-center gap-3 shadow-md">
+          <div 
+            onClick={() => setIsSearchingDestination(true)}
+            className="flex-1 bg-[var(--color-surface-1)] border border-[var(--color-border-subtle)] rounded-full py-3 px-5 flex items-center gap-3 shadow-md pointer-events-auto cursor-pointer"
+          >
             <Search size={20} className="text-[var(--color-primary)]" />
-            <span className="text-[var(--color-text-primary)] font-medium text-base truncate">
-              {booking.destinationName || 'Select destination...'}
+            <span className={`font-medium text-base truncate ${booking.destinationName ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+              {booking.destinationName || 'Where are you going?'}
             </span>
           </div>
+          
+          {isSubscriptionUsable() && (
+             <button 
+                onClick={() => navigate('/tap-and-ride')}
+                className="bg-[var(--color-primary)] text-black p-3 rounded-full shadow-lg pointer-events-auto active:scale-95 transition-all"
+             >
+                <Zap size={20} fill="currentColor" />
+             </button>
+          )}
         </div>
 
         <div className="flex gap-2 mt-4 pointer-events-auto">
@@ -308,6 +384,13 @@ export default function OnSpotBooking() {
               {nearbyCount > 0 ? `${nearbyCount} nearby kekes` : 'No kekes nearby'}
             </span>
           </div>
+
+          {isSubscriptionUsable() && (
+            <div className="bg-black/80 backdrop-blur-md px-4 py-2 rounded-full border border-[var(--color-primary)]/30 shadow-sm flex items-center gap-2">
+               <Zap size={12} className="text-[var(--color-primary)]" fill="currentColor" />
+               <span className="text-[10px] font-black uppercase tracking-widest text-white">{subscription.tierName} Active</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -392,22 +475,36 @@ export default function OnSpotBooking() {
                   <div className="space-y-4">
                     <button
                       onClick={handleBook}
-                      disabled={!booking.destinationName || !selectedKeke.withinGeofence}
-                      className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${selectedKeke.withinGeofence
-                        ? 'bg-[var(--color-primary)] text-[var(--color-primary-text)] shadow-[var(--shadow-glow)] hover:brightness-110'
-                        : 'bg-[var(--color-surface-3)] text-[var(--color-text-muted)] cursor-not-allowed grayscale shadow-none'
-                        }`}
+                      disabled={!selectedKeke.withinGeofence || !booking.destinationName}
+                      className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${
+                        selectedKeke.withinGeofence && booking.destinationName
+                          ? 'bg-[var(--color-primary)] text-[var(--color-primary-text)] shadow-[var(--shadow-glow)] hover:brightness-110'
+                          : 'bg-[var(--color-surface-3)] text-[var(--color-text-muted)] cursor-not-allowed grayscale shadow-none'
+                      }`}
                     >
-                      {selectedKeke.withinGeofence ? 'Book This Keke' : 'Out of Range'}
+                      {!booking.destinationName 
+                        ? 'Select Destination' 
+                        : selectedKeke.withinGeofence 
+                          ? 'Book This Keke' 
+                          : 'Out of Range'}
                     </button>
+                    
                     {!selectedKeke.withinGeofence && (
                       <div className="flex items-center justify-center gap-2 text-[var(--color-text-muted)] text-[11px] font-bold uppercase tracking-widest mt-1">
                         <ArrowRight size={14} className="-rotate-45 text-[var(--color-primary)]" />
                         Move closer to book — {selectedKeke.distanceMeters}m away
                       </div>
                     )}
+                    
+                    {selectedKeke.withinGeofence && !booking.destinationName && (
+                      <div className="flex items-center justify-center gap-2 text-[var(--color-warning)] text-[11px] font-bold uppercase tracking-widest mt-1">
+                        <MapPin size={14} />
+                        Choose where you're going to enable booking
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setSelectedKeke(null)}
+                      onClick={() => setSelectedKekeId(null)}
                       className="w-full bg-transparent text-[var(--color-text-secondary)] py-4 rounded-2xl font-bold text-base hover:bg-[var(--color-surface-2)] transition-colors"
                     >
                       Dismiss
@@ -479,6 +576,59 @@ export default function OnSpotBooking() {
         onClose={() => setIsAlarmModalOpen(false)}
         onSetAlarm={(data) => setActiveAlarm(data)}
       />
+
+      {/* Destination Search Overlay */}
+      <AnimatePresence>
+        {isSearchingDestination && (
+          <motion.div
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            className="fixed inset-0 z-[200] bg-[var(--color-bg)] flex flex-col"
+          >
+            <div className="px-6 py-4 flex items-center gap-4 bg-[var(--color-surface-1)] border-b border-[var(--color-border-subtle)]">
+              <button onClick={() => setIsSearchingDestination(false)} className="p-2 -ml-2 text-[var(--color-text-primary)]">
+                <X size={24} />
+              </button>
+              <div className="flex-1 relative">
+                <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Where are you going?"
+                  className="w-full bg-[var(--color-surface-2)] border-none rounded-full pl-10 pr-4 py-3 text-sm focus:ring-1 focus:ring-[var(--color-primary)] text-white"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-widest mb-4">Popular Destinations</h3>
+              <div className="space-y-4">
+                {['Ikeja City Mall', 'Maryland Mall', 'Oshodi Bus Terminal', 'Aba Main Market', 'Ariaria Market'].filter(p => p.toLowerCase().includes(searchQuery.toLowerCase())).map((place, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => {
+                      updateBooking({ destinationName: place });
+                      setIsSearchingDestination(false);
+                      setSearchQuery('');
+                    }} 
+                    className="w-full flex items-center gap-4 text-left group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[var(--color-surface-2)] flex items-center justify-center shrink-0 group-hover:bg-[var(--color-surface-3)]">
+                      <MapPin size={18} className="text-[var(--color-text-secondary)]" />
+                    </div>
+                    <div className="flex-1 border-b border-[var(--color-border-subtle)] pb-4">
+                      <p className="font-bold text-sm text-white">{place}</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">Nearby Inquest Station</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

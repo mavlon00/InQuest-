@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronRight, Navigation } from 'lucide-react';
 import { useStore } from '../store';
@@ -8,7 +8,19 @@ export default function ActiveTripBanner() {
   const booking = useStore((state) => state.booking);
 
   const handleClick = () => {
-    navigate('/home');
+    if (booking.type === 'ON_SPOT') {
+      navigate('/book/onspot');
+    } else if (booking.type === 'Personal') {
+      if (booking.status === 'REQUESTED') {
+        navigate('/book/personal/searching');
+      } else if (booking.status === 'ACCEPTED') {
+        navigate('/book/personal/matched');
+      } else {
+        navigate(`/book/personal/tracking/${booking.tripId}`);
+      }
+    } else {
+      navigate('/home');
+    }
   };
 
   return (

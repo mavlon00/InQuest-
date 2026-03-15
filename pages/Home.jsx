@@ -1,19 +1,23 @@
-﻿import { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Search, MapPin, Navigation, Calendar, RefreshCw,
   Wallet, Leaf, ChevronRight, Clock, User, ArrowUpRight,
   ArrowDownLeft, Share2, ShieldCheck, Award, Gift, CheckCircle2,
-  Sun, Moon
+  Sun, Moon, Zap
 } from 'lucide-react';
 import { useStore } from '../store';
+import useSubscriptionStore from '../store/subscriptionStore';
+import useRecurringStore from '../store/recurringStore';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import useOnSpotStore from '../store/onSpotStore';
 import MapControls from '../components/MapControls';
 import DestinationAlarm from '../components/DestinationAlarm';
 import TransactionDetailSheet from '../components/TransactionDetailSheet';
+import SubscriptionStatusCard from '../components/subscription/SubscriptionStatusCard';
 
 // Fix leaflet icon issue
 delete (L.Icon.Default.prototype)._getIconUrl;
@@ -148,6 +152,10 @@ const ActiveTripView = () => {
 export default function Home() {
   const navigate = useNavigate();
   const { user, booking, updateBooking, theme, setTheme, walletBalance, transactions, tripHistory, referralStatus, savedPlaces } = useStore();
+  const { subscription, fetchActiveSubscription } = useSubscriptionStore();
+  const { upcomingRides, fetchUpcomingRides } = useRecurringStore();
+  const { outstandingDebt, pendingRating, resetFlow } = useOnSpotStore();
+  
   const [location, setLocation] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +163,11 @@ export default function Home() {
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
   const [activeAlarm, setActiveAlarm] = useState(null);
+
+  useEffect(() => {
+    fetchActiveSubscription();
+    fetchUpcomingRides();
+  }, []);
 
   useEffect(() => {
     // Simulate getting GPS location
@@ -227,10 +240,9 @@ export default function Home() {
   };
 
   const shouldShowTracking = () => {
-    const status = booking?.status;
-    const hasDriver = booking?.driver !== null && booking?.driver !== undefined;
-    const validStatuses = ['ACCEPTED', 'EN_ROUTE', 'ARRIVING', 'ARRIVED', 'IN_PROGRESS'];
-    return validStatuses.includes(status) && hasDriver;
+    // Legacy tracking logic disabled. Routing happens directly to /book/personal/tracking/:id now.
+    // FloatingTripBar will show a banner to return to tracking.
+    return false;
   };
 
   if (shouldShowTracking()) {
@@ -330,6 +342,57 @@ export default function Home() {
 
       </div>
 
+      {/* ON-SPOT BOOKING LIFECYCLE BANNERS */}
+      <div className="px-6 mb-6 space-y-3">
+        {/* Outstanding Debt Banner */}
+        {outstandingDebt && (
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-amber-500/10 rounded-2xl p-4 border border-amber-500/20 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="text-amber-500" size={18} />
+              <div>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Travel Balance Due</p>
+                <p className="text-sm font-bold text-white">₦{outstandingDebt.amount} from previous trip</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate('/wallet/repay-debt')}
+              className="px-4 py-2 bg-amber-500 text-black text-[10px] font-black rounded-full uppercase tracking-widest"
+            >
+              Clear Now
+            </button>
+          </motion.div>
+        )}
+
+        {/* Pending Rating Banner */}
+        {pendingRating && (
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#7FFF00]/10 rounded-2xl p-4 border border-[#7FFF00]/20 flex items-center justify-between shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#7FFF00]/20 flex items-center justify-center">
+                <Star className="text-[#7FFF00]" size={18} fill="currentColor" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#7FFF00] uppercase tracking-widest">Rate Last Trip</p>
+                <p className="text-sm font-bold text-white">How was your ride with {pendingRating.driverName}?</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate(`/book/onspot/rating/${pendingRating.bookingId}`)}
+              className="p-2 bg-[#7FFF00] text-black rounded-full"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </motion.div>
+        )}
+      </div>
+
       {/* SEARCH BAR */}
       <div className="px-4 mb-8">
         <div
@@ -359,13 +422,16 @@ export default function Home() {
           <Link to="/book/onspot" className="text-sm font-medium text-[var(--color-primary)]">See All</Link>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Link to="/book/onspot" className="bg-[var(--color-surface-1)] p-4 rounded-2xl border border-[var(--color-border-subtle)] flex flex-col items-center text-center gap-2 hover:border-[var(--color-primary)] transition-colors group relative">
-            <div className="w-10 h-10 rounded-full bg-[var(--color-surface-2)] flex items-center justify-center group-hover:bg-[var(--color-primary)]/10 transition-colors">
-              <Navigation size={20} className="text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)] transition-colors" />
+          <Link to="/book/onspot" className="bg-gradient-to-br from-[var(--color-surface-1)] to-[#1A2421] p-4 rounded-2xl border border-[#7FFF00]/20 flex flex-col items-center text-center gap-2 hover:brightness-110 transition-all group relative overflow-hidden shadow-xl">
+            <div className="absolute top-0 right-0 w-8 h-8 bg-[#7FFF00]/10 rounded-bl-2xl flex items-center justify-center">
+              <div className="w-1.5 h-1.5 bg-[#7FFF00] rounded-full animate-pulse" />
+            </div>
+            <div className="w-10 h-10 rounded-full bg-[#7FFF00]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Zap size={22} className="text-[#7FFF00]" fill="currentColor" />
             </div>
             <div>
-              <h3 className="font-display font-medium text-sm mb-0.5">On-Spot</h3>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-sans leading-tight">Find nearby keke</p>
+              <h3 className="font-display font-bold text-sm mb-0.5 text-white">Book Nearby</h3>
+              <p className="text-[9px] text-[var(--color-primary)] font-black uppercase tracking-tight">On-Spot Now</p>
             </div>
             <ChevronRight size={14} className="absolute bottom-2 right-2 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
@@ -384,13 +450,40 @@ export default function Home() {
               <Calendar size={20} className="text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)] transition-colors" />
             </div>
             <div>
-              <h3 className="font-display font-medium text-sm mb-0.5">Recurring</h3>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-sans leading-tight">Schedule rides</p>
+              <h3 className="font-display font-medium text-sm mb-0.5">Commute</h3>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-sans leading-tight">Routine & Passes</p>
             </div>
             <ChevronRight size={14} className="absolute bottom-2 right-2 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
         </div>
       </div>
+
+      {/* SUBSCRIPTION & RECURRING CARDS */}
+      <div className="px-6 mb-8 space-y-4">
+        <SubscriptionStatusCard />
+
+        {/* RECURRING RIDE PREVIEW */}
+        {upcomingRides.length > 0 && (
+          <div 
+            onClick={() => navigate('/book/recurring')}
+            className="bg-[var(--color-surface-1)] rounded-[32px] p-6 border border-white/5 shadow-xl cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between"
+          >
+             <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-[#60A5FA] border border-white/5">
+                   <Calendar size={24} />
+                </div>
+                <div>
+                   <h3 className="text-white font-bold">Upcoming Routine</h3>
+                   <p className="text-white/40 text-xs">{upcomingRides[0].scheduleName} at {new Date(upcomingRides[0].scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+             </div>
+             <div className="bg-[#60A5FA]/10 px-3 py-1 rounded-full text-[10px] text-[#60A5FA] font-black uppercase tracking-widest border border-[#60A5FA]/20">
+                Today
+             </div>
+          </div>
+        )}
+      </div>
+
 
       {/* WALLET SECTION */}
       <div className="px-4 mb-8">

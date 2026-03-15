@@ -1,6 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Leaf, ArrowRight, Gift, RefreshCw, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Leaf, ArrowRight, Gift, RefreshCw, ChevronLeft, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useStore } from '../../store';
 
 export default function GreenWallet() {
@@ -12,98 +13,133 @@ export default function GreenWallet() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex flex-col pb-safe">
-      <header className="px-6 py-4 flex items-center gap-4 bg-[var(--color-surface-1)] sticky top-0 z-20 border-b border-[var(--color-border-subtle)]">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)] rounded-full transition-colors flex items-center justify-center min-w-[44px] min-h-[44px]">
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-lg font-display font-semibold">Green Wallet</h1>
+    <div className="min-h-screen bg-[#071F18] flex flex-col pb-24 text-white overflow-hidden relative">
+      {/* RADIANT GREEN GLOWS */}
+      <div className="absolute top-[-20%] right-[-10%] w-[80%] aspect-square bg-[#00FF88]/5 rounded-full blur-[140px]" />
+      <div className="absolute bottom-[10%] left-[-20%] w-[70%] aspect-square bg-[#008751]/10 rounded-full blur-[120px] animate-pulse" />
+
+      <header className="px-6 pt-12 pb-6 flex items-center justify-between sticky top-0 z-50 backdrop-blur-lg bg-[#071F18]/50">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-white/50 hover:text-white transition-colors">
+            <ChevronLeft size={28} />
+          </button>
+          <h1 className="text-2xl font-display font-bold">Green Wallet</h1>
+        </div>
+        <div className="px-3 py-1 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full">
+           <span className="text-[10px] font-black text-[#00FF88] uppercase tracking-widest">Eco Verified</span>
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
-        {/* Balance Card */}
-        <div className="bg-gradient-to-br from-[#008751] to-[#00663d] rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl translate-y-1/2 -translate-x-1/2" />
+      <main className="flex-1 overflow-y-auto px-6 py-4 space-y-10 relative z-10">
+        {/* HOLOGRAPHIC EMERALD CARD */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative h-72 rounded-[48px] p-10 overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,135,81,0.3)] group"
+        >
+          {/* Holographic Gradient Layers */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#00FF88] via-[#008751] to-[#004D31] z-0" />
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay z-1" />
+          <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-white/10 to-transparent z-2" />
 
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2 opacity-90">
-              <Leaf size={16} />
-              <span className="text-sm font-medium uppercase tracking-wider">Green Points</span>
+          <div className="relative z-10 h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center">
+                  <Leaf size={18} className="text-[#00FF88]" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/70">Eco Credits Available</span>
+              </div>
+              
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-6xl font-display font-bold text-white tracking-tighter">2,450</h2>
+                <span className="text-xl font-medium text-white/60">pts</span>
+              </div>
+              <p className="text-sm font-medium text-[#00FF88] mt-1 drop-shadow-md">≈ ₦2,450.00 Fixed Value</p>
             </div>
-            <h2 className="text-4xl font-display font-bold mb-1">2,450 <span className="text-xl font-normal opacity-80">pts</span></h2>
-            <p className="text-sm opacity-80 mb-6">≈ ₦2,450.00 value</p>
 
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <button
                 onClick={handleConvert}
-                className="flex-1 bg-white text-[#008751] py-3 rounded-xl font-semibold text-sm hover:bg-white/90 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 h-14 bg-white text-[#008751] rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all text-xs uppercase tracking-widest"
               >
-                <RefreshCw size={16} /> Convert to Cash
+                <RefreshCw size={16} /> Convert to Wallet
               </button>
               <button
                 onClick={() => navigate('/profile/green-rewards')}
-                className="flex-1 bg-black/20 text-white py-3 rounded-xl font-semibold text-sm hover:bg-black/30 transition-colors flex items-center justify-center gap-2"
+                className="w-14 h-14 bg-black/20 backdrop-blur-md border border-white/10 text-white rounded-2xl flex items-center justify-center hover:bg-black/30 transition-all active:scale-95"
               >
-                <Gift size={16} /> Redeem Rewards
+                <Gift size={20} />
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* How it works */}
-        <div>
-          <h3 className="text-sm font-medium text-[var(--color-text-secondary)] mb-4 uppercase tracking-wider">How to Earn</h3>
+        {/* IMPACT TRACKER */}
+        <section className="bg-white/[0.03] border border-white/5 rounded-[32px] p-6 space-y-6">
+           <div className="flex justify-between items-center">
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-white/30">Env. Impact Score</h3>
+              <div className="flex items-center gap-1 text-[#00FF88] font-bold text-xs">
+                 <TrendingUp size={14} /> +12% this month
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1">
+                 <div className="text-3xl font-display font-bold text-white">42.5<span className="text-sm text-white/30 ml-1">kg</span></div>
+                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">CO2 Offset</p>
+              </div>
+              <div className="space-y-1">
+                 <div className="text-3xl font-display font-bold text-white">128<span className="text-sm text-white/30 ml-1">km</span></div>
+                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Electric Miles</p>
+              </div>
+           </div>
+
+           <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '65%' }}
+                className="h-full bg-gradient-to-r from-[#008751] to-[#00FF88] shadow-[0_0_10px_rgba(0,255,136,0.3)]"
+              />
+           </div>
+           <p className="text-[10px] text-white/20 italic text-center">You're in the top 5% of eco-friendly commuters in Lagos.</p>
+        </section>
+
+        {/* EARNING MISSIONS */}
+        <section className="space-y-6">
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-white/30">Earning Programs</h3>
           <div className="space-y-3">
             {[
-              { title: 'Take a Ride', desc: 'Earn 1 point for every ₦100 spent on rides.', pts: '+1 pt/₦100' },
-              { title: 'Refer a Friend', desc: 'Get 500 points when they take their first ride.', pts: '+500 pts' },
-              { title: 'Use Inquest Wallet', desc: 'Earn double points when paying with your wallet.', pts: '2x pts' },
+              { title: 'Standard Commute', desc: '1 pt for every ₦100 spent on routine trips', pts: '1 pts/₦100', icon: <Leaf size={16} /> },
+              { title: 'Eco Referral', desc: 'Invite friends to the green movement', pts: '500 pts', icon: <Gift size={16} /> },
+              { title: 'Wallet Bonus', desc: '2x points on all wallet transactions', pts: '2x boost', icon: <RefreshCw size={16} />, featured: true },
             ].map((item, i) => (
-              <div key={i} className="bg-[var(--color-surface-1)] p-4 rounded-2xl border border-[var(--color-border-subtle)] flex items-center justify-between gap-4">
-                <div>
-                  <h4 className="font-semibold text-sm mb-1">{item.title}</h4>
-                  <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
-                </div>
-                <div className="bg-[var(--color-success)]/10 text-[var(--color-success)] px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
-                  {item.pts}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-[var(--color-text-secondary)] uppercase tracking-wider">Recent Activity</h3>
-            <button className="text-[var(--color-primary)] text-sm font-medium flex items-center gap-1">
-              View All <ArrowRight size={16} />
-            </button>
-          </div>
-          <div className="space-y-4">
-            {[
-              { title: 'Ride to Ikeja City Mall', date: 'Today, 2:30 PM', pts: '+45' },
-              { title: 'Referral Bonus (Sarah)', date: 'Yesterday, 10:15 AM', pts: '+500' },
-              { title: 'Converted to Cash', date: 'Oct 20, 2026', pts: '-1000', negative: true },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.negative ? 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]' : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'}`}>
-                    {item.negative ? <RefreshCw size={16} /> : <Leaf size={16} />}
+              <div 
+                key={i} 
+                className={`p-5 rounded-[28px] border flex items-center justify-between gap-4 transition-all ${
+                  item.featured ? 'bg-[#00FF88]/5 border-[#00FF88]/20 shadow-lg' : 'bg-white/[0.02] border-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    item.featured ? 'bg-[#00FF88]/10 text-[#00FF88]' : 'bg-white/5 text-white/40'
+                  }`}>
+                    {item.icon}
                   </div>
                   <div>
-                    <p className="font-medium text-sm">{item.title}</p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">{item.date}</p>
+                    <h4 className={`font-bold text-sm ${item.featured ? 'text-white' : 'text-white/80'} mb-0.5`}>{item.title}</h4>
+                    <p className="text-[10px] text-white/30 font-medium leading-tight">{item.desc}</p>
                   </div>
                 </div>
-                <span className={`font-semibold text-sm ${item.negative ? 'text-[var(--color-warning)]' : 'text-[var(--color-success)]'}`}>
+                <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                  item.featured ? 'bg-[#00FF88] text-black shadow-[0_0_15px_rgba(0,255,136,0.4)]' : 'bg-white/5 text-white/40'
+                }`}>
                   {item.pts}
-                </span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );

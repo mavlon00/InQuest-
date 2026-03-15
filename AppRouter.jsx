@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from './store';
 import { useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -12,7 +12,16 @@ import VerifyOTP from './pages/VerifyOTP';
 import ProfileSetup from './pages/ProfileSetup';
 import Home from './pages/Home';
 import OnSpotBooking from './pages/book/OnSpotBooking';
-import PersonalBooking from './pages/book/PersonalBooking';
+import PersonalBookingLocation from './pages/book/PersonalBookingLocation';
+import PersonalBookingEstimate from './pages/book/PersonalBookingEstimate';
+import PersonalBookingOptions from './pages/book/PersonalBookingOptions';
+import PersonalBookingConfirm from './pages/book/PersonalBookingConfirm';
+import PersonalBookingSearching from './pages/book/PersonalBookingSearching';
+import PersonalBookingScheduled from './pages/book/PersonalBookingScheduled';
+import PersonalBookingDriverMatched from './pages/book/PersonalBookingDriverMatched';
+import PersonalBookingTracking from './pages/book/PersonalBookingTracking';
+import PersonalBookingComplete from './pages/book/PersonalBookingComplete';
+import PersonalBookingRating from './pages/book/PersonalBookingRating';
 import RecurringBooking from './pages/book/RecurringBooking';
 import ManageRecurring from './pages/book/ManageRecurring';
 import Wallet from './pages/Wallet';
@@ -20,6 +29,29 @@ import Trips from './pages/Trips';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
+
+// On-Spot Booking Pages
+import OnSpotHome from './pages/book/OnSpotHome';
+import OnSpotWalkUp from './pages/book/OnSpotWalkUp';
+import OnSpotTracking from './pages/book/OnSpotTracking';
+import OnSpotComplete from './pages/book/OnSpotComplete';
+import OnSpotRating from './pages/book/OnSpotRating';
+
+// Subscription Pages
+import SubscriptionHome from './pages/subscription/SubscriptionHome';
+import SubscriptionCheckout from './pages/subscription/SubscriptionCheckout';
+import SubscriptionHistory from './pages/subscription/SubscriptionHistory';
+import TapAndRide from './pages/subscription/TapAndRide';
+import FareEstimator from './pages/FareEstimator';
+
+// Recurring Booking Pages
+import RecurringBookingHome from './pages/book/RecurringBookingHome';
+import RecurringBookingCreate from './pages/book/RecurringBookingCreate';
+import RecurringBookingDetail from './pages/book/RecurringBookingDetail';
+import RecurringBookingEdit from './pages/book/RecurringBookingEdit';
+
+// Driver Pages
+import DriverHome from './pages/driver/DriverHome';
 
 // Tracking Flows
 import LiveTracking from './pages/tracking/LiveTracking';
@@ -98,6 +130,7 @@ const GlobalLayout = () => {
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans flex flex-col relative overflow-hidden">
+      
       {showBanner && <ActiveTripBanner />}
 
       <div className="flex-1 relative overflow-y-auto">
@@ -142,10 +175,41 @@ export default function AppRouter() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/home" element={<Home />} />
-            <Route path="/book/onspot" element={<OnSpotBooking />} />
-            <Route path="/book/personal" element={<PersonalBooking />} />
-            <Route path="/book/recurring" element={<RecurringBooking />} />
+            
+            {/* New On-Spot Booking Flow */}
+            <Route path="/book/onspot" element={<OnSpotHome />} />
+            <Route path="/book/onspot/walkup" element={<OnSpotWalkUp />} />
+            <Route path="/book/onspot/tracking/:bookingId" element={<OnSpotTracking />} />
+            <Route path="/book/onspot/complete/:bookingId" element={<OnSpotComplete />} />
+            <Route path="/book/onspot/rating/:bookingId" element={<OnSpotRating />} />
+            
+            {/* New Personal Booking Flow */}
+            <Route path="/book/personal" element={<PersonalBookingLocation />} />
+            <Route path="/book/personal/estimate" element={<PersonalBookingEstimate />} />
+            <Route path="/book/personal/options" element={<PersonalBookingOptions />} />
+            <Route path="/book/personal/confirm" element={<PersonalBookingConfirm />} />
+            <Route path="/book/personal/searching" element={<PersonalBookingSearching />} />
+            <Route path="/book/personal/scheduled" element={<PersonalBookingScheduled />} />
+            <Route path="/book/personal/matched" element={<PersonalBookingDriverMatched />} />
+            <Route path="/book/personal/tracking/:bookingId" element={<PersonalBookingTracking />} />
+            <Route path="/book/personal/complete/:bookingId" element={<PersonalBookingComplete />} />
+            <Route path="/book/personal/rate/:bookingId" element={<PersonalBookingRating />} />
+
+            <Route path="/book/recurring" element={<RecurringBookingHome />} />
+            <Route path="/book/recurring/create" element={<RecurringBookingCreate />} />
+            <Route path="/book/recurring/:scheduleId" element={<RecurringBookingDetail />} />
+            <Route path="/book/recurring/:scheduleId/edit" element={<RecurringBookingEdit />} />
             <Route path="/book/recurring/manage" element={<ManageRecurring />} />
+
+            {/* Subscription Flow */}
+            <Route path="/subscription" element={<SubscriptionHome />} />
+            <Route path="/subscription/checkout/:tierId" element={<SubscriptionCheckout />} />
+            <Route path="/subscription/history" element={<SubscriptionHistory />} />
+            <Route path="/subscription/estimate" element={<FareEstimator />} />
+            <Route path="/tap-and-ride" element={<TapAndRide />} />
+
+            {/* Driver Flow */}
+            <Route path="/driver/home" element={<DriverHome />} />
 
             <Route path="/tracking/:rideId" element={<LiveTracking />} />
             <Route path="/tracking/:rideId/alarm" element={<DestinationAlarm />} />
