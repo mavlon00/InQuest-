@@ -102,7 +102,7 @@ async def register(
         }
     """
     try:
-        result = await AuthService.register_or_login(db, request.phone)
+        result = await AuthService.register_or_login(db, request.phone_number)
         return StandardResponse(message="OTP sent successfully", data=result)
     except InQuestException as e:
         logger.warning("Registration failed", error=e.message, code=e.code)
@@ -142,7 +142,7 @@ async def login(
         Success response with OTP status.
     """
     try:
-        result = await AuthService.register_or_login(db, request.phone)
+        result = await AuthService.register_or_login(db, request.phone_number)
         return StandardResponse(message="OTP sent successfully", data=result)
     except InQuestException as e:
         logger.warning("Login failed", error=e.message)
@@ -195,7 +195,7 @@ async def verify_otp(
     """
     try:
         result = await AuthService.verify_otp_and_login(
-            db, request.phone, request.otp
+            db, request.phone_number, request.otp, request.role or "Passenger"
         )
         return StandardResponse(
             message="Authentication successful",
@@ -206,7 +206,7 @@ async def verify_otp(
             "OTP verification failed",
             error=e.message,
             code=e.code,
-            phone=request.phone,
+            phone=request.phone_number,
         )
         raise
     except Exception as e:
@@ -242,7 +242,7 @@ async def resend_otp(
         Success response.
     """
     try:
-        result = await AuthService.resend_otp(db, request.phone)
+        result = await AuthService.resend_otp(db, request.phone_number)
         return StandardResponse(message="OTP resent successfully", data=result)
     except InQuestException as e:
         logger.warning("OTP resend failed", error=e.message)

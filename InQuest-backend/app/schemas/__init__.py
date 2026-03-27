@@ -5,6 +5,7 @@ Request/response schemas following the specification exactly.
 """
 
 # Authentication schemas
+from app.utils.responses import StandardResponse, ErrorResponse
 from app.schemas.auth import (
     RegisterRequest,
     VerifyOTPRequest,
@@ -13,8 +14,6 @@ from app.schemas.auth import (
     RefreshTokenRequest,
     LogoutRequest,
     DeleteAccountRequest,
-    StandardResponse,
-    ErrorResponse,
     UserResponse,
     AuthTokenResponse,
     LoginResponse,

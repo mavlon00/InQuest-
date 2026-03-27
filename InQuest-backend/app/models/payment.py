@@ -99,107 +99,18 @@ class Payment(Base):
         return f"<Payment(id={self.id}, amount={self.amount}, status={self.status})>"
 
 
-class Wallet(Base):
-    """
-    User wallet for managing account balance.
-    
-    Attributes:
-        id: Unique wallet identifier.
-        user_id: Associated user.
-        balance: Current balance in NGN.
-        total_topup: Total amount topped up.
-        total_spent: Total amount spent.
-        currency: Currency code (default: NGN).
-        created_at: Wallet creation date.
-        updated_at: Last balance update.
-        relationships:
-            user: Associated User object.
-            transactions: Transaction history.
-    """
+# Note: The following Wallet and WalletTransaction classes are commented out 
+# to avoid conflicts with app/models/wallet.py which uses the same table names.
 
+"""
+class Wallet(Base):
     __tablename__ = "wallets"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(
         sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
+    ...
+"""
 
-    balance: Mapped[Decimal] = mapped_column(
-        sa.Numeric(15, 2), default=Decimal("0.00"), nullable=False
-    )
-    total_topup: Mapped[Decimal] = mapped_column(
-        sa.Numeric(15, 2), default=Decimal("0.00"), nullable=False
-    )
-    total_spent: Mapped[Decimal] = mapped_column(
-        sa.Numeric(15, 2), default=Decimal("0.00"), nullable=False
-    )
-    currency: Mapped[str] = mapped_column(sa.String(3), default="NGN", nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
-
-    # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="wallet")
-    transactions: Mapped[list["WalletTransaction"]] = relationship(
-        "WalletTransaction",
-        back_populates="wallet",
-        cascade="all, delete-orphan",
-    )
-
-    def __repr__(self) -> str:
-        """String representation of Wallet."""
-        return f"<Wallet(user_id={self.user_id}, balance={self.balance})>"
-
-
-class TransactionType(str, enum.Enum):
-    """Enum for wallet transaction types."""
-    TOPUP = "TOPUP"  # Money added to wallet
-    RIDE = "RIDE"  # Ride payment deducted
-    REFUND = "REFUND"  # Money refunded
-    PAYOUT = "PAYOUT"  # Driver earning withdrawal
-
-
-class WalletTransaction(Base):
-    """
-    Individual wallet transaction record.
-    
-    Attributes:
-        id: Unique transaction identifier.
-        wallet_id: Associated wallet.
-        type: Transaction type.
-        amount: Transaction amount in NGN.
-        reference: External reference (ride_id, paystack_ref, etc.).
-        description: Transaction description.
-        balance_after: Balance after transaction.
-        created_at: When transaction occurred.
-    """
-
-    __tablename__ = "wallet_transactions"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    wallet_id: Mapped[int] = mapped_column(
-        sa.ForeignKey("wallets.id", ondelete="CASCADE"), nullable=False
-    )
-
-    type: Mapped[TransactionType] = mapped_column(
-        Enum(TransactionType), nullable=False, index=True
-    )
-    amount: Mapped[Decimal] = mapped_column(sa.Numeric(12, 2), nullable=False)
-    reference: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
-    description: Mapped[str] = mapped_column(sa.String(255), nullable=False)
-    balance_after: Mapped[Decimal] = mapped_column(sa.Numeric(15, 2), nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-       default=datetime.utcnow, nullable=False, index=True
-    )
-
-    # Relationships
-    wallet: Mapped["Wallet"] = relationship("Wallet", back_populates="transactions")
-
-    def __repr__(self) -> str:
-        """String representation of WalletTransaction."""
-        return f"<WalletTransaction(id={self.id}, type={self.type}, amount={self.amount})>"
+# Rest of the file...

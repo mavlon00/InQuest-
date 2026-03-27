@@ -30,7 +30,7 @@ class StandardResponse(BaseModel):
     status: str = Field(default="success", description="Response status")
     message: str = Field(description="Success message")
     data: Optional[Any] = Field(default=None, description="Response payload")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Response timestamp")
 
     class Config:
         """Pydantic configuration."""
@@ -60,7 +60,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     message: str = Field(description="Success message")
     data: List[T] = Field(description="List of items")
     pagination: dict = Field(description="Pagination metadata")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
     class Config:
         """Pydantic configuration."""
@@ -99,7 +99,7 @@ class ErrorResponse(BaseModel):
     code: str = Field(description="Error code identifier")
     message: str = Field(description="Error message")
     details: Optional[dict] = Field(default=None, description="Additional error details")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Error timestamp")
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Error timestamp")
 
     class Config:
         """Pydantic configuration."""
@@ -123,7 +123,7 @@ class HealthCheckResponse(BaseModel):
 
     status: str = Field(description="Service status: healthy, degraded, or unhealthy")
     version: str = Field(description="Application version")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
     class Config:
         """Pydantic configuration."""

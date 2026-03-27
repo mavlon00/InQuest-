@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=Syne:wght@400;500;600&display=swap');
+
+:root {
+  /* Base */
+  --color-bg:           #1A2421;  /* App background — deep dark green */
+  --color-surface-0:    #111A17;  /* Cards, modals — deepest surface */
+  --color-surface-1:    #1A2421;  /* Elevated cards */
+  --color-surface-2:    #243028;  /* Input backgrounds, secondary cards */
+  --color-surface-3:    #2E3C38;  /* Borders, dividers */
+
+  /* Primary — Chartreuse */
+  --color-primary:      #7FFF00;  /* CTAs, active states, earnings, key data */
+  --color-primary-dim:  #66CC00;  /* Pressed state for primary */
+  --color-on-primary:   #0D1A10;  /* Text ON primary background */
+
+  /* Semantic */
+  --color-success:      #4ADE80;  /* Success states */
+  --color-warning:      #FBBF24;  /* Warnings, surge, waiting fee */
+  --color-error:        #F87171;  /* Errors, cancellation, decline */
+  --color-info:         #60A5FA;  /* Info, navigation, ETA */
+
+  /* Text */
+  --color-text-primary:   #F0FFF4;  /* Main text — near white */
+  --color-text-secondary: #A8BDB5;  /* Labels, subtitles */
+  --color-text-muted:     #637A72;  /* Placeholders, disabled */
+
+  /* Driver-specific */
+  --color-online:    #7FFF00;  /* Online status indicator */
+  --color-offline:   #637A72;  /* Offline status */
+  --color-earnings:  #7FFF00;  /* All money/earnings text */
+  --color-sos:       #EF4444;  /* SOS button — always red, always visible */
+
+  /* Shadows & Glow */
+  --shadow-card:   0 2px 12px rgba(0,0,0,0.4);
+  --shadow-glow:   0 0 20px rgba(127,255,0,0.25);  /* Primary color glow */
+  --shadow-modal:  0 -4px 40px rgba(0,0,0,0.6);
+
+  /* Radius */
+  --radius-sm:  8px;
+  --radius-md:  16px;
+  --radius-lg:  24px;
+  --radius-xl:  32px;
+  --radius-pill:99px;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: 'Syne', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

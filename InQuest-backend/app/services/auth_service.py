@@ -6,9 +6,11 @@ All operations are asynchronous and integrated with the database.
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.models.user import User  # OTP and UserRole removed - will be reimplemented in Phase 3
+from sqlalchemy import select, delete
+from app.models.user import User, OTP, UserRole
+from app.models.wallet import Wallet
 from app.utils.security import create_access_token, extract_user_id_from_token, hash_password, verify_password
 from app.utils.validators import validate_phone_number
 from app.utils.otp import send_otp, generate_otp, is_otp_expired
@@ -63,7 +65,7 @@ class AuthService:
 
         # Remove any active OTPs for this number
         await db.execute(
-            select(OTP).where(OTP.phone_number == phone_number).delete()
+            delete(OTP).where(OTP.phone_number == phone_number)
         )
 
         # Create new OTP record
@@ -91,7 +93,7 @@ class AuthService:
         }
 
     @staticmethod
-    async def verify_otp_and_login(db: AsyncSession, phone_number: str, otp: str) -> dict:
+    async def verify_otp_and_login(db: AsyncSession, phone_number: str, otp: str, role: str = "Passenger") -> dict:
         """
         Verify OTP and create/login user, returning JWT token.
         
@@ -172,44 +174,71 @@ class AuthService:
             select(User).where(User.phone_number == phone_number)
         )
         user = result.scalars().first()
+        is_new_user = False
 
         if not user:
+            is_new_user = True
             # Create new user
+            user_role = UserRole.PASSENGER
+            if role == "Driver":
+                user_role = UserRole.DRIVER
+            elif role == "Admin":
+                user_role = UserRole.ADMIN
+                
             user = User(
                 phone_number=phone_number,
                 first_name="",
                 last_name="",
-                role=UserRole.PASSENGER,
+                role=user_role,
                 is_verified=True,
             )
             db.add(user)
+            await db.flush() # Get user ID
+            
+            # Create wallet
+            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
+            db.add(wallet)
+            
             await db.commit()
             await db.refresh(user)
-            logger.info("New user created", phone=phone_number, user_id=user.id)
+            logger.info("New user created with wallet", phone=phone_number, user_id=user.id)
         else:
             # Update last login
             user.last_login_at = datetime.utcnow()
             user.is_verified = True
             await db.commit()
+            await db.refresh(user)
             logger.info("User login", phone=phone_number, user_id=user.id)
 
+        # Ensure wallet exists (backfill for old users if any)
+        result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+        wallet = result.scalars().first()
+        if not wallet:
+            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
+            db.add(wallet)
+            await db.commit()
+            await db.refresh(user)
+
         # Generate JWT token
-        token_data = {"sub": user.phone_number, "user_id": user.id}
+        token_data = {"sub": user.phone_number, "user_id": user.id, "role": user.role.value}
         access_token = create_access_token(token_data)
 
         return {
             "user": {
-                "id": user.id,
+                "id": str(user.id),
                 "phone_number": user.phone_number,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "role": user.role.value,
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "created_at": user.created_at,
-                "last_login_at": user.last_login_at,
+                "email": user.email,
+                "photo_url": user.photo_url,
+                "membership_tier": user.membership_tier.value,
+                "wallet_balance": float(wallet.balance) if wallet else 0.0,
+                "green_points": wallet.green_points if wallet else 0,
+                "referral_code": user.referral_code,
+                "is_new_user": is_new_user,
             },
             "access_token": access_token,
+            "refresh_token": access_token, # For now same as access_token or implement rotation
             "token_type": "bearer",
             "expires_in": settings.JWT_EXPIRATION_HOURS * 3600,
         }
@@ -238,7 +267,7 @@ class AuthService:
 
         # Remove previous OTPs
         await db.execute(
-            select(OTP).where(OTP.phone_number == phone_number).delete()
+            delete(OTP).where(OTP.phone_number == phone_number)
         )
 
         # Create new OTP

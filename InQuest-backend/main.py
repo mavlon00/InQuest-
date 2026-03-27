@@ -42,9 +42,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize database if not in production
     if settings.ENVIRONMENT != "production":
-        logger.info("Initializing database...")
-        # Note: In production, use Alembic migrations instead
-        # await init_db()
+        logger.info("Initializing database tables...")
+        await init_db()
 
     logger.info("InQuest application started successfully")
     yield
@@ -67,9 +66,26 @@ app = FastAPI(
 
 
 # Configure CORS middleware
+origins = settings.ALLOWED_ORIGINS
+if settings.DEBUG:
+    # In development, also allow common local ports if not already present
+    dev_origins = [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:3001", "http://127.0.0.1:3001",
+        "http://localhost:3002", "http://127.0.0.1:3002",
+        "http://localhost:5173", "http://127.0.0.1:5173", 
+        "http://localhost:5174", "http://127.0.0.1:5174",
+        "http://localhost:5175", "http://127.0.0.1:5175",
+        "http://192.168.56.1:5175", "http://192.168.54.69:5175",
+        "http://192.168.56.1:3002", "http://192.168.54.69:3002"
+    ]
+    for origin in dev_origins:
+        if origin not in origins:
+            origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -119,11 +135,14 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     Returns:
         JSON response with generic error message.
     """
+    import traceback
     logger.error(
         "Unhandled exception",
         error=str(exc),
         error_type=type(exc).__name__,
+        traceback=traceback.format_exc(),
     )
+    print(traceback.format_exc())
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -139,8 +158,13 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 app.include_router(auth.router)
 
 # Import and include rides router
-from app.routes import rides
+from app.routes import rides, ws, wallet, profile, features, subscriptions
 app.include_router(rides.router)
+app.include_router(ws.router)
+app.include_router(wallet.router)
+app.include_router(profile.router)
+app.include_router(features.router)
+app.include_router(subscriptions.router)
 
 
 # Health check endpoints

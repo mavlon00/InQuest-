@@ -184,6 +184,10 @@ async def send_otp(phone_number: str, otp: str) -> bool:
         return await send_otp_via_termii(phone_number, otp)
     elif provider == "twilio":
         return await send_otp_via_twilio(phone_number, otp)
+    elif provider == "console":
+        logger.info(f"--- [DEVELOPMENT OTP] --- To: {phone_number} | Code: {otp}")
+        print(f"\n\n\n>>> OTP FOR {phone_number}: {otp} <<<\n\n\n")
+        return True
     else:
         raise ExternalAPIException(
             f"Unknown SMS provider: {provider}",

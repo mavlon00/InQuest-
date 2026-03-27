@@ -1,8 +1,8 @@
 """
 User and authentication-related database models.
 
-This module defines the User model and related authentication models for the passenger app.
-All models use SQLAlchemy 2.0+ with proper type hints and relationships, following the spec.
+This module defines the User model and related authentication models for the InQuest system.
+All models use SQLAlchemy 2.0+ with proper type hints and relationships.
 """
 
 from datetime import datetime
@@ -15,6 +15,14 @@ import uuid
 from app.database import Base
 
 
+class UserRole(str, enum.Enum):
+    """Enum for user roles."""
+    PASSENGER = "Passenger"
+    DRIVER = "Driver"
+    ADMIN = "Admin"
+    SUPPORT = "Support"
+
+
 class MembershipTier(str, enum.Enum):
     """Enum for user membership tiers."""
     STANDARD = "Standard"
@@ -25,44 +33,25 @@ class MembershipTier(str, enum.Enum):
 
 class User(Base):
     """
-    User model for passengers in the InQuest system.
-    Phone-based authentication, referenced by all user activities.
-    
-    Attributes:
-        id: UUID primary key.
-        phone: Nigerian phone number in +234 format (unique, indexed).
-        first_name: User's first name.
-        last_name: User's last name.
-        email: User's email (optional, unique).
-        profile_photo_url: CDN URL to profile photo.
-        referral_code: 6-char unique code for referrals.
-        referred_by_id: FK to user who referred this user.
-        membership_tier: Current tier (Standard/Silver/Gold/Platinum).
-        total_trips: Denormalized counter for tier calculations.
-        rating: Average passenger rating (1-5).
-        pin_hash: Bcrypt hash of 4-digit transaction PIN.
-        deleted_at: Soft delete timestamp.
-        created_at: Account creation time.
-        updated_at: Last update time.
-        relationships:
-            trips: All trips as passenger.
-            wallet: Wallet account.
-            guardians: Emergency contacts.
-            saved_places: Saved locations.
-            recurring_bookings: Scheduled rides.
+    User model for the InQuest system.
+    Handles both Passengers and Drivers (roles).
     """
 
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    phone: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True, nullable=False)
-    first_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    phone_number: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(sa.String(100), default="", nullable=False)
+    last_name: Mapped[str] = mapped_column(sa.String(100), default="", nullable=False)
     email: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
-    profile_photo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole), default=UserRole.PASSENGER, nullable=False
+    )
     
     # Referral system
-    referral_code: Mapped[str] = mapped_column(sa.String(10), unique=True, nullable=False)
+    referral_code: Mapped[str] = mapped_column(sa.String(10), unique=True, nullable=False, default=lambda: str(uuid.uuid4())[:6].upper())
     referred_by_id: Mapped[str | None] = mapped_column(sa.String(36), sa.ForeignKey("users.id"), nullable=True)
     
     # Membership and rating
@@ -72,7 +61,10 @@ class User(Base):
     total_trips: Mapped[int] = mapped_column(default=0, nullable=False)
     rating: Mapped[Decimal | None] = mapped_column(sa.DECIMAL(3, 2), nullable=True)
     
-    # Security
+    # Performance/Security
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
+    emergency_contact: Mapped[str | None] = mapped_column(sa.String(20), nullable=True)
     pin_hash: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     
     # Soft delete
@@ -82,53 +74,67 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+    last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
     trips: Mapped[list["Trip"]] = relationship(
         "Trip",
-        foreign_keys="Trip.passenger_id",
+        primaryjoin="User.id == Trip.passenger_id",
         back_populates="passenger",
         cascade="all, delete-orphan",
     )
+    
+    # Ride relationships for Passenger/Driver roles
+    rides_as_passenger: Mapped[list["Ride"]] = relationship(
+        "Ride",
+        primaryjoin="User.id == Ride.passenger_id",
+        back_populates="passenger",
+        cascade="all, delete-orphan",
+    )
+    
     rides_as_driver: Mapped[list["Ride"]] = relationship(
         "Ride",
-        foreign_keys="Ride.driver_id",
+        primaryjoin="User.id == Ride.driver_id",
         back_populates="driver",
         cascade="all, delete-orphan",
     )
+    
+    # A User can be a Driver (KYC/Verification Profile)
+    driver_profile: Mapped["DriverProfile"] = relationship(
+        "DriverProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    
+    # Real-time Driver Tracking (from driver.py)
+    active_driver_profile: Mapped["Driver"] = relationship(
+        "Driver",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    
     wallet: Mapped["Wallet"] = relationship(
         "Wallet",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
-    driver_profile: Mapped["Driver"] = relationship(
-        "Driver",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
+    
+    guardians: Mapped[list["Guardian"]] = relationship("Guardian", back_populates="user", cascade="all, delete-orphan")
+    saved_places: Mapped[list["SavedPlace"]] = relationship("SavedPlace", back_populates="user", cascade="all, delete-orphan")
+    recurring_bookings: Mapped[list["RecurringBooking"]] = relationship("RecurringBooking", back_populates="user", cascade="all, delete-orphan")
+    notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    sos_records: Mapped[list["SOS"]] = relationship("SOS", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
-        """String representation of User."""
         return f"<User(id={self.id}, phone={self.phone_number}, role={self.role})>"
 
 
 class OTP(Base):
     """
     OTP (One-Time Password) model for phone number verification.
-    
-    Stores OTPs sent to users for authentication. OTPs are temporary and expire
-    after a configured duration.
-    
-    Attributes:
-        id: Unique OTP record identifier.
-        phone_number: Phone number for which OTP was generated.
-        otp_code: The 6-digit OTP value.
-        attempts: Number of verification attempts made.
-        is_used: Whether this OTP has been successfully used.
-        created_at: When the OTP was generated.
-        expires_at: When the OTP expires.
     """
 
     __tablename__ = "otps"
@@ -145,30 +151,19 @@ class OTP(Base):
     expires_at: Mapped[datetime] = mapped_column(nullable=False, index=True)
 
     def __repr__(self) -> str:
-        """String representation of OTP."""
         return f"<OTP(phone={self.phone_number}, used={self.is_used})>"
 
 
 class JWTBlacklist(Base):
     """
     JWT Token blacklist for logout functionality.
-    
-    Stores JWTs that have been invalidated (e.g., on logout) to prevent reuse.
-    This allows for proper session management and secure logout.
-    
-    Attributes:
-        id: Unique blacklist entry identifier.
-        token_jti: JWT ID claim (unique token identifier).
-        user_id: User who owns this token.
-        created_at: When token was blacklisted.
-        expires_at: When token would have expired anyway.
     """
 
     __tablename__ = "jwt_blacklist"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     token_jti: Mapped[str] = mapped_column(sa.String(500), unique=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -177,5 +172,4 @@ class JWTBlacklist(Base):
     expires_at: Mapped[datetime] = mapped_column(nullable=False, index=True)
 
     def __repr__(self) -> str:
-        """String representation of JWTBlacklist."""
         return f"<JWTBlacklist(user_id={self.user_id})>"

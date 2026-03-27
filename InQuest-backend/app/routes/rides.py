@@ -7,8 +7,11 @@ scheduled rides, ride tracking, and history.
 
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import or_, desc
 from decimal import Decimal
 from app.database import get_db
+from app.models.ride import Ride, RideStatus
 from app.services.auth_service import AuthService
 from app.services.ride_service import RideService
 from app.schemas.ride import (
@@ -25,7 +28,6 @@ from app.utils.responses import StandardResponse, PaginatedResponse
 from app.utils.security import extract_user_id_from_token, verify_token
 from app.utils.logging_config import get_logger
 from app.utils.exceptions import AuthenticationException, InQuestException
-from app.models.ride import RideStatus
 
 logger = get_logger(__name__)
 
@@ -422,6 +424,69 @@ async def get_ride(
         raise
 
 
+@router.get(
+    "/history",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="Get ride history",
+    description="Retrieve authenticated user's past rides.",
+)
+async def get_ride_history(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """
+    Get ride history for the currently authenticated user.
+    Works for both passengers and drivers.
+    """
+    try:
+        user_id = get_current_user_id(authorization)
+
+        result = await db.execute(
+            select(Ride)
+            .where(
+                or_(
+                    Ride.passenger_id == user_id,
+                    Ride.driver_id == user_id,
+                )
+            )
+            .order_by(desc(Ride.created_at))
+            .limit(limit)
+            .offset(offset)
+        )
+        rides = result.scalars().all()
+
+        ride_list = []
+        for r in rides:
+            ride_list.append({
+                "id": str(r.id),
+                "status": r.status.value,
+                "pickup_latitude": r.pickup_latitude,
+                "pickup_longitude": r.pickup_longitude,
+                "destination_latitude": r.destination_latitude,
+                "destination_longitude": r.destination_longitude,
+                "pickup_address": r.pickup_address if hasattr(r, 'pickup_address') else None,
+                "destination_address": r.destination_address if hasattr(r, 'destination_address') else None,
+                "distance_km": float(r.distance_km) if r.distance_km else None,
+                "estimated_fare": float(r.estimated_fare) if r.estimated_fare else 0,
+                "actual_fare": float(r.actual_fare) if r.actual_fare else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            })
+
+        return StandardResponse(
+            message="Ride history retrieved successfully",
+            data={"rides": ride_list, "count": len(ride_list), "limit": limit, "offset": offset},
+        )
+    except AuthenticationException as e:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting ride history: {e}")
+        raise
+
+
 @router.post(
     "/{ride_id}/fare",
     response_model=StandardResponse,
@@ -471,4 +536,300 @@ async def get_fare_breakdown(
         raise
     except InQuestException as e:
         logger.warning("Error calculating fare", error=e.message)
+        raise
+
+
+@router.post(
+    "/{ride_id}/dispute",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="File a ride dispute",
+    description="Submit a dispute for an existing completed ride.",
+)
+async def file_ride_dispute(
+    ride_id: str,
+    request: dict,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """
+    File a dispute for a completed ride.
+
+    Args:
+        ride_id: ID of the ride to dispute.
+        request: JSON body with 'reason' field.
+        authorization: Bearer token.
+        db: Database session.
+
+    Returns:
+        Success confirmation.
+    """
+    try:
+        from sqlalchemy import or_
+        user_id = get_current_user_id(authorization)
+        reason = request.get("reason", "")
+
+        result = await db.execute(
+            select(Ride).where(Ride.id == ride_id)
+        )
+        ride = result.scalar_one_or_none()
+        if not ride:
+            from app.utils.exceptions import NotFoundException
+            raise InQuestException(
+                "Ride not found",
+                code="RIDE_NOT_FOUND",
+                status_code=404,
+            )
+
+        if ride.passenger_id != user_id and ride.driver_id != user_id:
+            raise AuthenticationException(
+                "You don't have access to this ride",
+                code="AUTH_FORBIDDEN",
+            )
+
+        logger.info(
+            "Dispute filed",
+            ride_id=ride_id,
+            user_id=user_id,
+            reason=reason[:200] if reason else "",
+        )
+
+        return StandardResponse(
+            message="Dispute submitted successfully. Our team will review it within 48 hours.",
+            data={"ride_id": ride_id, "status": "DISPUTE_PENDING"},
+        )
+    except AuthenticationException as e:
+        raise
+    except InQuestException as e:
+        logger.warning("Error filing dispute", error=e.message)
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error filing dispute: {e}")
+        raise
+
+
+@router.post(
+    "/fare/estimate",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="Get pre-ride fare estimate",
+)
+async def get_fare_estimate(
+    request: dict,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """Get estimated fare for a planned trip."""
+    try:
+        user_id = get_current_user_id(authorization)
+        p_lat = request.get("pickup_latitude")
+        p_lon = request.get("pickup_longitude")
+        d_lat = request.get("destination_latitude")
+        d_lon = request.get("destination_longitude")
+        
+        from app.utils.geofencing import haversine_distance
+        dist_m = haversine_distance(p_lat, p_lon, d_lat, d_lon)
+        dist_km = Decimal(str(dist_m / 1000))
+        
+        fare, breakdown = RideService.calculate_fare(dist_km)
+        
+        return StandardResponse(
+            message="Fare estimate calculated",
+            data={
+                "baseFare": float(breakdown["base_fare"]),
+                "deadMileageFee": float(breakdown["distance_charge"]),
+                "stopFees": 0,
+                "total": float(breakdown["total"]),
+                "distanceKm": float(dist_km),
+                "currency": "NGN"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error estimating fare: {e}")
+        raise InQuestException("Failed to estimate fare", code="ESTIMATE_ERROR")
+
+
+@router.put("/{ride_id}/arrived", response_model=StandardResponse)
+async def mark_ride_arrived(
+    ride_id: int,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark ride as arrived at pickup."""
+    try:
+        driver_id = get_current_user_id(authorization)
+        ride = await RideService.get_ride_by_id(db, ride_id)
+        
+        if ride.driver_id != driver_id:
+            raise AuthenticationException("Not authorized for this ride", code="RIDE_FORBIDDEN")
+            
+        ride.status = RideStatus.ARRIVED
+        await db.commit()
+        
+        # Notify passenger
+        try:
+            from app.routes.ws import manager
+            await manager.send_personal_message({"type": "trip_status", "status": "ARRIVED"}, ride.passenger_id)
+        except: pass
+        
+        return StandardResponse(message="Arrived at pickup")
+    except Exception as e:
+        logger.error(f"Error marking arrived: {e}")
+        raise
+
+@router.put("/{ride_id}/start", response_model=StandardResponse)
+async def start_ride(
+    ride_id: int,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Start the trip (passenger is in vehicle)."""
+    try:
+        driver_id = get_current_user_id(authorization)
+        ride = await RideService.get_ride_by_id(db, ride_id)
+        
+        if ride.driver_id != driver_id:
+            raise AuthenticationException("Not authorized for this ride", code="RIDE_FORBIDDEN")
+            
+        ride.status = RideStatus.IN_PROGRESS
+        ride.started_at = datetime.utcnow()
+        await db.commit()
+        
+        # Notify passenger
+        try:
+            from app.routes.ws import manager
+            await manager.send_personal_message({"type": "trip_status", "status": "IN_PROGRESS"}, ride.passenger_id)
+        except: pass
+        
+        return StandardResponse(message="Trip started")
+    except Exception as e:
+        logger.error(f"Error starting trip: {e}")
+        raise
+
+@router.put("/{ride_id}/end", response_model=StandardResponse)
+async def end_ride(
+    ride_id: int,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """End the trip and calculate final fare."""
+    try:
+        driver_id = get_current_user_id(authorization)
+        ride = await RideService.get_ride_by_id(db, ride_id)
+        
+        if ride.driver_id != driver_id:
+            raise AuthenticationException("Not authorized for this ride", code="RIDE_FORBIDDEN")
+            
+        ride.status = RideStatus.COMPLETED
+        ride.completed_at = datetime.utcnow()
+        
+        # Calculation: Actual fare same as estimate for now unless IoT is used
+        ride.actual_fare = ride.estimated_fare
+        
+        await db.commit()
+        
+        # Notify passenger
+        try:
+            from app.routes.ws import manager
+            await manager.send_personal_message({
+                "type": "trip_status", 
+                "status": "COMPLETED",
+                "fare": float(ride.actual_fare)
+            }, ride.passenger_id)
+        except: pass
+        
+        return StandardResponse(message="Trip completed", data={"fare": float(ride.actual_fare)})
+    except Exception as e:
+        logger.error(f"Error ending trip: {e}")
+        raise
+
+@router.post("/{ride_id}/cancel", response_model=StandardResponse)
+async def cancel_ride(
+    ride_id: int,
+    request: dict,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """Cancel an active or pending ride."""
+    try:
+        user_id = get_current_user_id(authorization)
+        reason = request.get("reason", "User requested cancellation")
+        
+        ride = await RideService.get_ride_by_id(db, ride_id)
+        if ride.status not in [RideStatus.REQUESTED, RideStatus.CONFIRMED, RideStatus.ARRIVED]:
+            raise InQuestException("Ride cannot be cancelled in its current state", code="CANCEL_FORBIDDEN")
+            
+        ride.status = RideStatus.CANCELLED
+        ride.updated_at = datetime.utcnow()
+        await db.commit()
+        
+        logger.info(f"Ride {ride_id} cancelled by user {user_id}. Reason: {reason}")
+        
+        # Notify other party if matched
+        try:
+            other_id = ride.driver_id if user_id == ride.passenger_id else ride.passenger_id
+            if other_id:
+                from app.routes.ws import manager
+                await manager.send_personal_message({
+                    "type": "trip_cancelled",
+                    "data": {"tripId": ride.id, "reason": reason}
+                }, other_id)
+        except: pass
+        
+        return StandardResponse(message="Ride cancelled successfully")
+    except Exception as e:
+        logger.error(f"Error cancelling ride: {e}")
+        raise
+
+
+@router.post(
+    "/onspot/walkup/link",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="Link to a driver for walk-up",
+)
+async def link_walkup_driver(
+    request: dict,
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """Link to a driver using a 4-digit code or QR (stub)."""
+    try:
+        user_id = get_current_user_id(authorization)
+        code = str(request.get("code")).strip()
+        
+        # Real database lookup with joinedload for vehicle
+        from app.models.driver import Driver
+        from sqlalchemy import select
+        from sqlalchemy.orm import joinedload
+        
+        # Searching for the driver with the provided code
+        stmt = select(Driver).where(Driver.walkup_code == code).options(joinedload(Driver.vehicle))
+        result = await db.execute(stmt)
+        driver = result.scalars().first()
+        
+        if driver:
+            # Check if driver is online
+            if not driver.is_online:
+                 raise InQuestException("Driver is currently offline", code="DRIVER_OFFLINE", status_code=400)
+                 
+            return StandardResponse(
+                message="Driver linked successfully",
+                data={
+                    "driverId": driver.id,
+                    "driverName": driver.name,
+                    "driverPhoto": driver.photo_url,
+                    "driverRating": float(driver.rating) if driver.rating else 5.0,
+                    "vehiclePlate": driver.vehicle.plate_number if driver.vehicle else "N/A",
+                    "vehicleColor": driver.vehicle.color if driver.vehicle else "N/A",
+                    "vehicleModel": driver.vehicle.model if driver.vehicle else "Bajaj",
+                    "linkedAt": datetime.utcnow().isoformat()
+                }
+            )
+        else:
+            raise InQuestException("Invalid driver code or QR. Please check the code and try again.", code="INVALID_CODE", status_code=400)
+    except InQuestException:
+        raise
+    except Exception as e:
+        logger.error(f"Error linking driver: {e}")
         raise

@@ -41,12 +41,19 @@ class Driver(Base):
     rating: Mapped[Optional[Decimal]] = mapped_column(sa.DECIMAL(3, 2), nullable=True)
     total_trips: Mapped[int] = mapped_column(default=0, nullable=False)
     
+    # 4-digit code for on-spot/walk-up linking (e.g., '1234')
+    walkup_code: Mapped[Optional[str]] = mapped_column(sa.String(4), unique=True, nullable=True)
+    
     is_online: Mapped[bool] = mapped_column(default=False, nullable=False)
     
     # Current location (normally from Redis)
     lat: Mapped[Optional[Decimal]] = mapped_column(sa.DECIMAL(10, 8), nullable=True)
     lng: Mapped[Optional[Decimal]] = mapped_column(sa.DECIMAL(11, 8), nullable=True)
     heading: Mapped[Optional[Decimal]] = mapped_column(nullable=True)  # 0-360 degrees
+    
+    user_id: Mapped[str] = mapped_column(
+        sa.String(36), sa.ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
     
     vehicle_id: Mapped[str] = mapped_column(
         sa.String(36), sa.ForeignKey("vehicles.id"), nullable=False
@@ -58,6 +65,7 @@ class Driver(Base):
     )
     
     # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="active_driver_profile")
     vehicle: Mapped["Vehicle"] = relationship("Vehicle", foreign_keys=[vehicle_id])
     trips: Mapped[list["Trip"]] = relationship(
         "Trip",

@@ -15,9 +15,10 @@ class RegisterRequest(BaseModel):
     
     Spec: Section 1.1 - Register
     """
-    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Nigerian phone in +234 format")
+    phone_number: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Nigerian phone in +234 format")
     first_name: Optional[str] = Field(None, min_length=2, max_length=100, description="User's first name")
     last_name: Optional[str] = Field(None, min_length=2, max_length=100, description="User's last name")
+    role: Optional[str] = Field("Passenger", description="User role (Passenger or Driver)")
     referral_code: Optional[str] = Field(None, description="Optional referral code")
 
 
@@ -27,7 +28,7 @@ class LoginRequest(BaseModel):
     
     Spec: Section 1.4 - Login
     """
-    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Registered phone number")
+    phone_number: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Registered phone number")
 
 
 class VerifyOTPRequest(BaseModel):
@@ -36,8 +37,9 @@ class VerifyOTPRequest(BaseModel):
     
     Spec: Section 1.2 - Verify OTP
     """
-    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone that received OTP")
+    phone_number: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone that received OTP")
     otp: str = Field(..., pattern=r"^\d{6}$", description="6-digit OTP code")
+    role: Optional[str] = Field(None, description="User role to assign if new user (Passenger or Driver)")
 
 
 class ResendOTPRequest(BaseModel):
@@ -46,7 +48,7 @@ class ResendOTPRequest(BaseModel):
     
     Spec: Section 1.3 - Resend OTP
     """
-    phone: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone number that needs OTP resent")
+    phone_number: str = Field(..., pattern=r"^\+234[789]\d{9}$", description="Phone number that needs OTP resent")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -87,13 +89,12 @@ class ProfileUpdateRequest(BaseModel):
     """
     first_name: Optional[str] = Field(
         None,
-        min_length=2,
+        min_length=1,
         max_length=100,
         description="User's first name",
     )
     last_name: Optional[str] = Field(
         None,
-        min_length=2,
         max_length=100,
         description="User's last name",
     )
@@ -101,20 +102,24 @@ class ProfileUpdateRequest(BaseModel):
         None,
         description="User's email address",
     )
-    profile_photo_url: Optional[str] = Field(
+    photo_url: Optional[str] = Field(
         None,
         description="URL to profile photo",
+    )
+    emergency_contact: Optional[str] = Field(
+        None,
+        description="Emergency contact phone number",
     )
 
 
 class UserResponse(BaseModel):
     """User data in response objects."""
     id: str = Field(..., description="User unique identifier")
-    phone: str = Field(..., description="User's phone number")
+    phone_number: str = Field(..., description="User's phone number")
     first_name: str = Field(..., description="User's first name")
     last_name: str = Field(..., description="User's last name")
     email: Optional[str] = Field(None, description="User's email")
-    profile_photo_url: Optional[str] = Field(None, description="Profile photo URL")
+    photo_url: Optional[str] = Field(None, description="Profile photo URL")
     membership_tier: str = Field(..., description="Membership tier (Standard/Silver/Gold/Platinum)")
     wallet_balance: float = Field(..., description="Current wallet balance")
     green_points: int = Field(..., description="Green points balance")
@@ -178,25 +183,4 @@ class LoginResponse(BaseModel):
         }
 
 
-class StandardResponse(BaseModel):
-    """Standard API response envelope."""
-    success: bool = Field(..., description="Whether the request succeeded")
-    message: Optional[str] = Field(None, description="Human-readable message")
-    data: Optional[dict] = Field(None, description="Response data")
-    error: Optional[dict] = Field(None, description="Error details if failed")
 
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "message": "Operation completed successfully",
-                "data": {}
-            }
-        }
-
-
-class ErrorResponse(BaseModel):
-    """Standard error response."""
-    success: bool = Field(default=False, description="Always False for errors")
-    error: dict = Field(..., description="Error details with code and message")

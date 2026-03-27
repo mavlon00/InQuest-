@@ -112,7 +112,7 @@ class Settings(BaseSettings):
     @validator("SMS_PROVIDER")
     def validate_sms_provider(cls, v: str) -> str:
         """Validate SMS provider is supported."""
-        allowed = {"twilio", "termii"}
+        allowed = {"twilio", "termii", "console"}
         if v not in allowed:
             raise ValueError(f"SMS_PROVIDER must be one of {allowed}, got {v}")
         return v

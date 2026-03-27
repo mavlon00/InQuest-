@@ -1,0 +1,8 @@
+{
+  "name": "Inquest Mobility - Driver App",
+  "description": "Driver application for Inquest Mobility keke drivers in Lagos.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+    "name": "inquest-revamp",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "axios": "^1.13.6",
+        "clsx": "^2.1.1",
+        "date-fns": "^4.1.0",
+        "framer-motion": "^12.10.0",
+        "leaflet": "^1.9.4",
+        "lucide-react": "^0.542.0",
+        "puppeteer": "^24.38.0",
+        "react": "^19.1.1",
+        "react-dom": "^19.1.1",
+        "react-leaflet": "^5.0.0",
+        "react-router-dom": "^7.9.1",
+        "tailwind-merge": "^3.3.1",
+        "zustand": "^5.0.8"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.1.12",
+        "@vitejs/plugin-react": "^5.0.2",
+        "tailwindcss": "^4.1.12",
+        "vite": "^7.1.5"
+    }
+}

@@ -30,7 +30,7 @@ def validate_phone_number(phone: str) -> str:
         ValidationException: If phone number is invalid.
     """
     # Remove common formatting characters
-    cleaned = re.sub(r"[\s\-\(\)]", "", phone)
+    cleaned = re.sub(r"[\s\-\(\)\+]", "", phone)
 
     # If it starts with 0, replace with 234
     if cleaned.startswith("0"):

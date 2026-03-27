@@ -27,9 +27,12 @@ class InQuestException(HTTPException):
     error_code: str = "UNKNOWN_ERROR"
     message: str = "An error occurred"
     
-    def __init__(self, message: str = None, details: dict = None):
+    def __init__(self, message: str = None, error_code: str = None, status_code: int = None, details: dict = None, **kwargs):
         self.message = message or self.message
-        details = details or {}
+        self.error_code = error_code or kwargs.get("code") or self.error_code
+        self.code = self.error_code  # Add alias for compatibility
+        self.status_code = status_code or self.status_code
+        self.details = details or {}
         
         super().__init__(
             status_code=self.status_code,
@@ -272,10 +275,8 @@ class InternalServerError(InQuestException):
     error_code = "INTERNAL_ERROR"
     message = "Internal server error. Please try again later."
 
-    """Raised when user lacks required permissions."""
-
-    def __init__(self, message: str, code: str = "AUTH_002", details: dict = None):
-        super().__init__(code=code, message=message, status_code=403, details=details)
+    def __init__(self, message: str = None, code: str = None, details: dict = None):
+        super().__init__(message=message, error_code=code, status_code=500, details=details)
 
 
 class OTPException(InQuestException):
@@ -324,6 +325,13 @@ class PaymentException(InQuestException):
     """Raised when payment operation fails."""
 
     def __init__(self, message: str, code: str = "PAYMENT_001", details: dict = None):
+        super().__init__(code=code, message=message, status_code=400, details=details)
+
+
+class WalletException(InQuestException):
+    """Raised when wallet operation fails."""
+
+    def __init__(self, message: str, code: str = "WALLET_001", details: dict = None):
         super().__init__(code=code, message=message, status_code=400, details=details)
 
 

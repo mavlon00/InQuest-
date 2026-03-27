@@ -247,6 +247,37 @@ class RideService:
                 estimated_fare=estimated_fare,
             )
 
+            # Broadcast to drivers via WebSocket
+            try:
+                from app.routes.ws import manager
+                # Fetch passenger details for the broadcast
+                result = await db.execute(select(User).where(User.id == passenger_id))
+                passenger = result.scalars().first()
+                passenger_name = f"{passenger.first_name} {passenger.last_name}" if passenger and passenger.first_name else "Guest"
+                
+                # We could fetch nearby drivers, but for now we broadcast to all
+                await manager.broadcast_to_drivers({
+                    "type": "trip_request",
+                    "data": {
+                        "tripId": ride.id,
+                        "passenger": {
+                            "name": passenger_name,
+                            "rating": 4.8,
+                            "totalTrips": 10,
+                            "photoUrl": passenger.photo_url if passenger else None,
+                        },
+                        "pickup": {"lat": pickup_lat, "lng": pickup_lon, "address": "Passenger Location"},
+                        "destination": {"lat": destination_lat, "lng": destination_lon, "address": "Destination"},
+                        "distanceToPickup": 1.2, # Mock distance
+                        "estimatedFare": float(estimated_fare),
+                        "paymentMethod": "CASH", 
+                        "insurance": False,
+                        "timeoutSecs": 30,
+                    }
+                })
+            except Exception as e:
+                logger.error("Failed to broadcast trip request", error=str(e))
+
             return ride
 
         except Exception as e:
@@ -306,6 +337,37 @@ class RideService:
             ride_id=ride_id,
             driver_id=driver_id,
         )
+
+        try:
+            from app.routes.ws import manager
+            # Fetch driver details
+            user_result = await db.execute(select(User).where(User.id == driver_id))
+            driver_user = user_result.scalars().first()
+            driver_name = f"{driver_user.first_name} {driver_user.last_name}" if driver_user else "Driver"
+
+            prof_result = await db.execute(select(DriverProfile).where(DriverProfile.user_id == driver_id))
+            driver_prof = prof_result.scalars().first()
+
+            # Message passenger that their ride was accepted
+            await manager.send_personal_message({
+                "type": "trip_accepted",
+                "data": {
+                    "tripId": ride.id,
+                    "driver": {
+                        "name": driver_name,
+                        "rating": float(driver_prof.rating) if driver_prof else 4.8,
+                        "trips": driver_prof.total_trips if driver_prof else 20,
+                        "plate": driver_prof.vehicle_plate if driver_prof else "UNKNOWN",
+                        "vehicle": driver_prof.vehicle_model if driver_prof else "Keke NAPEP",
+                        "lat": 0, # Could be actual
+                        "lng": 0
+                    },
+                    "eta": 5,
+                    "acceptedAt": ride.updated_at.isoformat() if ride.updated_at else datetime.utcnow().isoformat()
+                }
+            }, ride.passenger_id)
+        except Exception as e:
+            logger.error("Failed to broadcast trip accepted", error=str(e))
 
         return ride
 
@@ -403,6 +465,20 @@ class RideService:
             ride_id=ride_id,
             new_status=new_status,
         )
+
+        # Notify passenger via WebSocket
+        try:
+            from app.routes.ws import manager
+            await manager.send_personal_message({
+                "type": "ride_status_update",
+                "data": {
+                    "rideId": ride.id,
+                    "status": ride.status.value,
+                    "updatedAt": ride.updated_at.isoformat() if ride.updated_at else datetime.utcnow().isoformat()
+                }
+            }, ride.passenger_id)
+        except Exception as e:
+            logger.error("Failed to broadcast ride status update", error=str(e))
 
         return ride
 

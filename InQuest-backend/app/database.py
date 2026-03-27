@@ -76,7 +76,8 @@ async def init_db() -> None:
     This should be called during application startup in development/testing.
     In production, use Alembic migrations instead.
     """
-    async with engine.begin() as conn:
+    engine_ = _get_engine()
+    async with engine_.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
@@ -87,7 +88,8 @@ async def drop_db() -> None:
     WARNING: This is destructive and should only be used in development/testing.
     Never use in production.
     """
-    async with engine.begin() as conn:
+    engine_ = _get_engine()
+    async with engine_.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
 
@@ -97,4 +99,5 @@ async def close_db() -> None:
     
     Should be called during application shutdown.
     """
-    await engine.dispose()
+    engine_ = _get_engine()
+    await engine_.dispose()
