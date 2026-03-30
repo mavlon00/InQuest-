@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-bg: var(--bg);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  
+  --color-primary: var(--primary);
+  --color-primary-dim: var(--primary-dim);
+  --color-on-primary: var(--on-primary);
+  
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+  
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+}
+
+@layer base {
+  :root {
+    /* Light Theme */
+    --bg: #F4F7F5;
+    --surface-0: #FFFFFF;
+    --surface-1: #F4F7F5;
+    --surface-2: #E8ECEA;
+    --surface-3: #D1D9D5;
+    
+    --primary: #7FFF00;
+    --primary-dim: #66CC00;
+    --on-primary: #0D1A10;
+    
+    --success: #22C55E;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --info: #3B82F6;
+    
+    --text-primary: #111A17;
+    --text-secondary: #4A5C54;
+    --text-muted: #82968C;
+  }
+
+  .dark {
+    /* Dark Theme */
+    --bg: #1A2421;
+    --surface-0: #111A17;
+    --surface-1: #1A2421;
+    --surface-2: #243028;
+    --surface-3: #2E3C38;
+    
+    --primary: #7FFF00;
+    --primary-dim: #66CC00;
+    --on-primary: #0D1A10;
+    
+    --success: #4ADE80;
+    --warning: #FBBF24;
+    --error: #F87171;
+    --info: #60A5FA;
+    
+    --text-primary: #F0FFF4;
+    --text-secondary: #A8BDB5;
+    --text-muted: #637A72;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
