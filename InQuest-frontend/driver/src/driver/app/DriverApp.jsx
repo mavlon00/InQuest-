@@ -6,8 +6,7 @@ import { connectWebSocket } from '../utils/websocket';
 
 // Auth screens
 import DriverSplash         from '../screens/auth/DriverSplash';
-import DriverPhoneEntry     from '../screens/auth/DriverPhoneEntry';
-import DriverOTPVerify      from '../screens/auth/DriverOTPVerify';
+import DriverLogin          from '../screens/auth/DriverLogin';
 import DriverProfileSetup   from '../screens/auth/DriverProfileSetup';
 import DriverVehicleSetup   from '../screens/auth/DriverVehicleSetup';
 import DriverDocumentUpload from '../screens/auth/DriverDocumentUpload';
@@ -118,8 +117,7 @@ export default function DriverApp() {
       <Routes>
         {/* — Public routes — */}
         <Route path="/"            element={<DriverSplash />}    />
-        <Route path="/login"       element={<DriverPhoneEntry />} />
-        <Route path="/verify-otp"  element={<DriverOTPVerify />}  />
+        <Route path="/login"       element={<DriverLogin />}     />
 
         {/* — Onboarding (requires login, no KYC check yet) — */}
         <Route element={<ProfileSetupGuard />}>

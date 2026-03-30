@@ -10,14 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services.auth_service import AuthService
 from app.schemas.auth import (
-    RegisterRequest,
-    VerifyOTPRequest,
-    ResendOTPRequest,
-    LoginRequest,
     ProfileUpdateRequest,
     UserResponse,
     AuthTokenResponse,
     LoginResponse,
+    EmailRegisterRequest,
+    EmailLoginRequest,
+    GoogleAuthRequest,
 )
 from app.utils.responses import StandardResponse, ErrorResponse
 from app.utils.security import extract_user_id_from_token
@@ -50,11 +49,18 @@ def get_current_user_id(authorization: str = Header(...)) -> int:
                 "Invalid authentication scheme. Use 'Bearer <token>'",
                 code="AUTH_INVALID_SCHEME",
             )
-        user_id = int(extract_user_id_from_token(token).split("@")[0] if "@" in extract_user_id_from_token(token) else extract_user_id_from_token(token))
         # Extract actual user ID from token
         from app.utils.security import verify_token
         payload = verify_token(token)
-        return payload.get("user_id")
+        user_id = payload.get("user_id")
+        
+        if not user_id:
+            raise AuthenticationException(
+                "Token missing user ID",
+                code="AUTH_INVALID_TOKEN",
+            )
+            
+        return user_id
     except ValueError:
         raise AuthenticationException(
             "Invalid authorization header format",
@@ -67,189 +73,6 @@ def get_current_user_id(authorization: str = Header(...)) -> int:
         )
 
 
-@router.post(
-    "/register",
-    response_model=StandardResponse,
-    status_code=200,
-    summary="Initiate user registration",
-    description="Register a new user or initiate login by providing phone number. Sends OTP via SMS.",
-    responses={
-        200: {"description": "OTP sent successfully"},
-        400: {"description": "Invalid phone number"},
-    },
-)
-async def register(
-    request: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
-) -> StandardResponse:
-    """
-    Initiate user registration or login.
-    
-    Sends a 6-digit OTP to the provided phone number. The user must verify
-    this OTP with the /verify-otp endpoint to complete authentication.
-    
-    Args:
-        request: Phone number in international format.
-        db: Database session.
-        
-    Returns:
-        Success response with OTP status.
-        
-    Example:
-        POST /api/v1/auth/register
-        {
-            "phone_number": "+2341234567890"
-        }
-    """
-    try:
-        result = await AuthService.register_or_login(db, request.phone_number)
-        return StandardResponse(message="OTP sent successfully", data=result)
-    except InQuestException as e:
-        logger.warning("Registration failed", error=e.message, code=e.code)
-        raise
-    except Exception as e:
-        logger.error("Unexpected error in registration", error=str(e))
-        raise InQuestException(
-            "An unexpected error occurred",
-            code="INTERNAL_001",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/login",
-    response_model=StandardResponse,
-    status_code=200,
-    summary="Initiate user login",
-    description="Login by providing phone number. Same as /register - sends OTP.",
-    responses={
-        200: {"description": "OTP sent successfully"},
-        400: {"description": "Invalid phone number"},
-    },
-)
-async def login(
-    request: LoginRequest,
-    db: AsyncSession = Depends(get_db),
-) -> StandardResponse:
-    """
-    Initiate user login (same flow as registration).
-    
-    Args:
-        request: Phone number.
-        db: Database session.
-        
-    Returns:
-        Success response with OTP status.
-    """
-    try:
-        result = await AuthService.register_or_login(db, request.phone_number)
-        return StandardResponse(message="OTP sent successfully", data=result)
-    except InQuestException as e:
-        logger.warning("Login failed", error=e.message)
-        raise
-    except Exception as e:
-        logger.error("Unexpected error in login", error=str(e))
-        raise InQuestException(
-            "An unexpected error occurred",
-            code="INTERNAL_001",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/verify-otp",
-    response_model=StandardResponse,
-    status_code=200,
-    summary="Verify OTP and complete authentication",
-    description="Verify 6-digit OTP. If valid, returns JWT token and user information.",
-    responses={
-        200: {"description": "OTP verified, JWT token issued"},
-        400: {"description": "Invalid or expired OTP"},
-    },
-)
-async def verify_otp(
-    request: VerifyOTPRequest,
-    db: AsyncSession = Depends(get_db),
-) -> StandardResponse:
-    """
-    Verify OTP and issue JWT token.
-    
-    This completes the authentication flow. If OTP is valid:
-    1. User is created if new, or logged in if existing
-    2. JWT token is generated and returned
-    3. User can now use authenticated endpoints
-    
-    Args:
-        request: Phone number and OTP code.
-        db: Database session.
-        
-    Returns:
-        Success response containing user info and JWT token.
-        
-    Example:
-        POST /api/v1/auth/verify-otp
-        {
-            "phone_number": "+2341234567890",
-            "otp": "123456"
-        }
-    """
-    try:
-        result = await AuthService.verify_otp_and_login(
-            db, request.phone_number, request.otp, request.role or "Passenger"
-        )
-        return StandardResponse(
-            message="Authentication successful",
-            data=result,
-        )
-    except InQuestException as e:
-        logger.warning(
-            "OTP verification failed",
-            error=e.message,
-            code=e.code,
-            phone=request.phone_number,
-        )
-        raise
-    except Exception as e:
-        logger.error("Unexpected error in OTP verification", error=str(e))
-        raise InQuestException(
-            "An unexpected error occurred",
-            code="INTERNAL_001",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/resend-otp",
-    response_model=StandardResponse,
-    status_code=200,
-    summary="Resend OTP to phone number",
-    description="Generate and send a new OTP code.",
-)
-async def resend_otp(
-    request: ResendOTPRequest,
-    db: AsyncSession = Depends(get_db),
-) -> StandardResponse:
-    """
-    Resend OTP to phone number.
-    
-    Invalidates any previous OTP and sends a new one.
-    
-    Args:
-        request: Phone number.
-        db: Database session.
-        
-    Returns:
-        Success response.
-    """
-    try:
-        result = await AuthService.resend_otp(db, request.phone_number)
-        return StandardResponse(message="OTP resent successfully", data=result)
-    except InQuestException as e:
-        logger.warning("OTP resend failed", error=e.message)
-        raise
-    except Exception as e:
-        logger.error("Unexpected error in OTP resend", error=str(e))
-        raise
 
 
 @router.put(
@@ -402,3 +225,85 @@ async def logout(
     except AuthenticationException as e:
         logger.warning("Logout failed", error=e.message)
         raise
+
+
+# ── Email / Password Routes ───────────────────────────────────────────────────
+
+@router.post(
+    "/email-register",
+    response_model=StandardResponse,
+    status_code=201,
+    summary="Register with email and password",
+    description="Create a new account using email, password, first name, last name, and an optional referral code.",
+)
+async def email_register(
+    request: EmailRegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    try:
+        result = await AuthService.email_register(
+            db,
+            email=request.email,
+            password=request.password,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            role=request.role,
+            referral_code=request.referral_code,
+        )
+        return StandardResponse(message="Account created successfully", data=result)
+    except InQuestException as e:
+        logger.warning("Email registration failed", error=e.message)
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in email registration", error=str(e))
+        raise InQuestException("An unexpected error occurred", code="INTERNAL_001", status_code=500)
+
+
+@router.post(
+    "/email-login",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="Login with email and password",
+)
+async def email_login(
+    request: EmailLoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    try:
+        result = await AuthService.email_login(db, email=request.email, password=request.password)
+        return StandardResponse(message="Login successful", data=result)
+    except InQuestException as e:
+        logger.warning("Email login failed", error=e.message)
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in email login", error=str(e))
+        raise InQuestException("An unexpected error occurred", code="INTERNAL_001", status_code=500)
+
+
+# ── Google OAuth Route ────────────────────────────────────────────────────────
+
+@router.post(
+    "/google",
+    response_model=StandardResponse,
+    status_code=200,
+    summary="Authenticate with Google",
+    description="Sign in or register using a Google ID token obtained from the frontend.",
+)
+async def google_auth(
+    request: GoogleAuthRequest,
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    try:
+        result = await AuthService.google_auth(
+            db,
+            id_token=request.id_token,
+            role=request.role,
+            referral_code=request.referral_code,
+        )
+        return StandardResponse(message="Google authentication successful", data=result)
+    except InQuestException as e:
+        logger.warning("Google auth failed", error=e.message)
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in Google auth", error=str(e))
+        raise InQuestException("An unexpected error occurred", code="INTERNAL_001", status_code=500)

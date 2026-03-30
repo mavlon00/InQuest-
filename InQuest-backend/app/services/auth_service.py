@@ -9,17 +9,15 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from app.models.user import User, OTP, UserRole
+from app.models.user import User, UserRole
 from app.models.wallet import Wallet
 from app.utils.security import create_access_token, extract_user_id_from_token, hash_password, verify_password
 from app.utils.validators import validate_phone_number
-from app.utils.otp import send_otp, generate_otp, is_otp_expired
 from app.utils.exceptions import (
     AuthenticationException,
-    OTPException,
-    OTPExpiredException,
     DuplicateResourceException,
     ResourceNotFoundException,
+    InQuestException,
 )
 from app.utils.logging_config import get_logger
 from config import settings
@@ -34,259 +32,7 @@ class AuthService:
     All methods are async and work with database sessions.
     """
 
-    @staticmethod
-    async def register_or_login(db: AsyncSession, phone_number: str) -> dict:
-        """
-        Register a new user or initiate login for existing user.
-        
-        Generates and sends OTP to the provided phone number.
-        If user doesn't exist, one will be created during OTP verification.
-        
-        Args:
-            db: Database session.
-            phone_number: User's phone number in international format.
-            
-        Returns:
-            Dictionary with OTP status information.
-            
-        Raises:
-            ExternalAPIException: If SMS sending fails.
-        """
-        # Validate and normalize phone number
-        phone_number = validate_phone_number(phone_number)
 
-        # Generate OTP
-        otp_code = generate_otp()
-
-        # Calculate expiration
-        otp_expiration = datetime.utcnow() + timedelta(
-            minutes=settings.OTP_EXPIRATION_MINUTES
-        )
-
-        # Remove any active OTPs for this number
-        await db.execute(
-            delete(OTP).where(OTP.phone_number == phone_number)
-        )
-
-        # Create new OTP record
-        otp_record = OTP(
-            phone_number=phone_number,
-            otp_code=otp_code,
-            expires_at=otp_expiration,
-        )
-        db.add(otp_record)
-        await db.commit()
-
-        # Send OTP via SMS
-        try:
-            await send_otp(phone_number, otp_code)
-            logger.info("OTP sent successfully", phone=phone_number)
-        except Exception as e:
-            await db.rollback()
-            logger.error("Failed to send OTP", phone=phone_number, error=str(e))
-            raise
-
-        return {
-            "status": "OTP_SENT",
-            "phone_number": phone_number,
-            "message": "OTP sent to your phone. Valid for 10 minutes.",
-        }
-
-    @staticmethod
-    async def verify_otp_and_login(db: AsyncSession, phone_number: str, otp: str, role: str = "Passenger") -> dict:
-        """
-        Verify OTP and create/login user, returning JWT token.
-        
-        This is the final step in the authentication flow. After verification,
-        a new user is created if they don't exist, and a JWT token is issued.
-        
-        Args:
-            db: Database session.
-            phone_number: User's phone number.
-            otp: 6-digit OTP code to verify.
-            
-        Returns:
-            Dictionary containing user info and JWT token.
-            
-        Raises:
-            OTPException: If OTP is invalid.
-            OTPExpiredException: If OTP has expired.
-        """
-        # Validate inputs
-        phone_number = validate_phone_number(phone_number)
-
-        # Fetch OTP record
-        result = await db.execute(
-            select(OTP)
-            .where(OTP.phone_number == phone_number)
-            .order_by(OTP.created_at.desc())
-        )
-        otp_record = result.scalars().first()
-
-        if not otp_record:
-            logger.warning("OTP not found", phone=phone_number)
-            raise OTPException(
-                "No OTP found for this phone number. Please request a new one.",
-                code="OTP_NOT_FOUND",
-            )
-
-        # Check if OTP has expired
-        if is_otp_expired(otp_record.created_at):
-            logger.warning("OTP expired", phone=phone_number)
-            raise OTPExpiredException(
-                "OTP has expired. Please request a new one.",
-            )
-
-        # Check if OTP is used
-        if otp_record.is_used:
-            logger.warning("OTP already used", phone=phone_number)
-            raise OTPException(
-                "This OTP has already been used.",
-                code="OTP_ALREADY_USED",
-            )
-
-        # Verify OTP code
-        otp_record.attempts += 1
-        if otp_record.otp_code != otp:
-            logger.warning(
-                "Invalid OTP attempt",
-                phone=phone_number,
-                attempts=otp_record.attempts,
-            )
-            await db.commit()
-
-            if otp_record.attempts >= 3:
-                raise OTPException(
-                    "Too many incorrect attempts. Please request a new OTP.",
-                    code="OTP_TOO_MANY_ATTEMPTS",
-                )
-            raise OTPException(
-                f"Invalid OTP. {3 - otp_record.attempts} attempts remaining.",
-                code="OTP_INVALID",
-            )
-
-        # Mark OTP as used
-        otp_record.is_used = True
-        await db.commit()
-
-        # Get or create user
-        result = await db.execute(
-            select(User).where(User.phone_number == phone_number)
-        )
-        user = result.scalars().first()
-        is_new_user = False
-
-        if not user:
-            is_new_user = True
-            # Create new user
-            user_role = UserRole.PASSENGER
-            if role == "Driver":
-                user_role = UserRole.DRIVER
-            elif role == "Admin":
-                user_role = UserRole.ADMIN
-                
-            user = User(
-                phone_number=phone_number,
-                first_name="",
-                last_name="",
-                role=user_role,
-                is_verified=True,
-            )
-            db.add(user)
-            await db.flush() # Get user ID
-            
-            # Create wallet
-            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
-            db.add(wallet)
-            
-            await db.commit()
-            await db.refresh(user)
-            logger.info("New user created with wallet", phone=phone_number, user_id=user.id)
-        else:
-            # Update last login
-            user.last_login_at = datetime.utcnow()
-            user.is_verified = True
-            await db.commit()
-            await db.refresh(user)
-            logger.info("User login", phone=phone_number, user_id=user.id)
-
-        # Ensure wallet exists (backfill for old users if any)
-        result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
-        wallet = result.scalars().first()
-        if not wallet:
-            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
-            db.add(wallet)
-            await db.commit()
-            await db.refresh(user)
-
-        # Generate JWT token
-        token_data = {"sub": user.phone_number, "user_id": user.id, "role": user.role.value}
-        access_token = create_access_token(token_data)
-
-        return {
-            "user": {
-                "id": str(user.id),
-                "phone_number": user.phone_number,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "email": user.email,
-                "photo_url": user.photo_url,
-                "membership_tier": user.membership_tier.value,
-                "wallet_balance": float(wallet.balance) if wallet else 0.0,
-                "green_points": wallet.green_points if wallet else 0,
-                "referral_code": user.referral_code,
-                "is_new_user": is_new_user,
-            },
-            "access_token": access_token,
-            "refresh_token": access_token, # For now same as access_token or implement rotation
-            "token_type": "bearer",
-            "expires_in": settings.JWT_EXPIRATION_HOURS * 3600,
-        }
-
-    @staticmethod
-    async def resend_otp(db: AsyncSession, phone_number: str) -> dict:
-        """
-        Resend OTP to phone number.
-        
-        Invalidates any existing OTPs and generates a new one.
-        
-        Args:
-            db: Database session.
-            phone_number: User's phone number.
-            
-        Returns:
-            Dictionary with OTP status.
-        """
-        phone_number = validate_phone_number(phone_number)
-
-        # Generate new OTP
-        otp_code = generate_otp()
-        otp_expiration = datetime.utcnow() + timedelta(
-            minutes=settings.OTP_EXPIRATION_MINUTES
-        )
-
-        # Remove previous OTPs
-        await db.execute(
-            delete(OTP).where(OTP.phone_number == phone_number)
-        )
-
-        # Create new OTP
-        otp_record = OTP(
-            phone_number=phone_number,
-            otp_code=otp_code,
-            expires_at=otp_expiration,
-        )
-        db.add(otp_record)
-        await db.commit()
-
-        # Send OTP
-        await send_otp(phone_number, otp_code)
-        logger.info("OTP resent", phone=phone_number)
-
-        return {
-            "status": "OTP_SENT",
-            "message": "New OTP sent to your phone.",
-        }
 
     @staticmethod
     async def get_user_by_phone(db: AsyncSession, phone_number: str) -> User:
@@ -383,3 +129,204 @@ class AuthService:
         logger.info("Profile updated", user_id=user_id)
 
         return user
+
+    # ── Helpers ────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _build_auth_response(user: User, wallet: Wallet | None, is_new_user: bool) -> dict:
+        """Build the standard auth response dict."""
+        token_data = {"sub": user.email or user.phone_number or str(user.id), "user_id": user.id, "role": user.role.value}
+        access_token = create_access_token(token_data)
+        return {
+            "user": {
+                "id": str(user.id),
+                "phone_number": user.phone_number,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": user.email,
+                "photo_url": user.photo_url,
+                "role": user.role.value,
+                "membership_tier": user.membership_tier.value,
+                "wallet_balance": float(wallet.balance) if wallet else 0.0,
+                "green_points": wallet.green_points if wallet else 0,
+                "referral_code": user.referral_code,
+                "is_new_user": is_new_user,
+            },
+            "access_token": access_token,
+            "refresh_token": access_token,
+            "token_type": "bearer",
+            "expires_in": settings.JWT_EXPIRATION_HOURS * 3600,
+        }
+
+    @staticmethod
+    async def _ensure_wallet(db: AsyncSession, user: User) -> Wallet:
+        """Create a wallet for the user if one doesn't already exist."""
+        result = await db.execute(select(Wallet).where(Wallet.user_id == user.id))
+        wallet = result.scalars().first()
+        if not wallet:
+            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
+            db.add(wallet)
+            await db.commit()
+            await db.refresh(wallet)
+        return wallet
+
+    # ── Email / Password Auth ─────────────────────────────────────────────────
+
+    @staticmethod
+    async def email_register(
+        db: AsyncSession,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        role: str = "Passenger",
+        referral_code: str | None = None,
+    ) -> dict:
+        """
+        Register a new user with email and password.
+        
+        Raises DuplicateResourceException if email already exists.
+        """
+        email = email.lower().strip()
+
+        # Check existing email
+        result = await db.execute(select(User).where(User.email == email))
+        if result.scalars().first():
+            raise DuplicateResourceException("An account with this email already exists.", code="EMAIL_EXISTS")
+
+        # Resolve referral
+        referred_by_id = None
+        if referral_code and role == "Passenger":
+            ref_result = await db.execute(select(User).where(User.referral_code == referral_code.upper()))
+            referred_user = ref_result.scalars().first()
+            if referred_user:
+                referred_by_id = referred_user.id
+
+        user_role = UserRole.DRIVER if role == "Driver" else UserRole.PASSENGER
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            first_name=first_name,
+            last_name=last_name,
+            role=user_role,
+            is_verified=True,
+            referred_by_id=referred_by_id,
+        )
+        db.add(user)
+        await db.flush()
+
+        wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
+        db.add(wallet)
+        await db.commit()
+        await db.refresh(user)
+        await db.refresh(wallet)
+
+        logger.info("New user registered via email", email=email, role=role)
+        return AuthService._build_auth_response(user, wallet, is_new_user=True)
+
+    @staticmethod
+    async def email_login(db: AsyncSession, email: str, password: str) -> dict:
+        """
+        Login with email and password.
+        
+        Raises AuthenticationException for bad credentials.
+        """
+        email = email.lower().strip()
+
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalars().first()
+
+        if not user or not user.password_hash:
+            raise AuthenticationException("Invalid email or password.", code="INVALID_CREDENTIALS")
+
+        if not verify_password(password, user.password_hash):
+            raise AuthenticationException("Invalid email or password.", code="INVALID_CREDENTIALS")
+
+        user.last_login_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+
+        wallet = await AuthService._ensure_wallet(db, user)
+
+        logger.info("User login via email", email=email)
+        return AuthService._build_auth_response(user, wallet, is_new_user=False)
+
+    # ── Google OAuth ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def google_auth(
+        db: AsyncSession,
+        id_token: str,
+        role: str = "Passenger",
+        referral_code: str | None = None,
+    ) -> dict:
+        """
+        Authenticate via Google OAuth ID token.
+        
+        Verifies the token with Google, then creates or logs in the user.
+        """
+        try:
+            from google.oauth2 import id_token as google_id_token
+            from google.auth.transport import requests as google_requests
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
+            )
+        except Exception as e:
+            raise AuthenticationException(f"Invalid Google token: {e}", code="GOOGLE_TOKEN_INVALID")
+
+        google_id = idinfo["sub"]
+        email = idinfo.get("email", "").lower()
+        first_name = idinfo.get("given_name", "")
+        last_name = idinfo.get("family_name", "")
+        photo_url = idinfo.get("picture")
+
+        # Check if user exists by google_id or email
+        result = await db.execute(select(User).where(User.google_id == google_id))
+        user = result.scalars().first()
+        is_new_user = False
+
+        if not user and email:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+
+        if not user:
+            is_new_user = True
+            # Resolve referral
+            referred_by_id = None
+            if referral_code and role == "Passenger":
+                ref_result = await db.execute(select(User).where(User.referral_code == referral_code.upper()))
+                referred_user = ref_result.scalars().first()
+                if referred_user:
+                    referred_by_id = referred_user.id
+
+            user_role = UserRole.DRIVER if role == "Driver" else UserRole.PASSENGER
+            user = User(
+                email=email or None,
+                google_id=google_id,
+                first_name=first_name,
+                last_name=last_name,
+                photo_url=photo_url,
+                role=user_role,
+                is_verified=True,
+                referred_by_id=referred_by_id,
+            )
+            db.add(user)
+            await db.flush()
+            wallet = Wallet(user_id=user.id, balance=Decimal("0.00"), green_points=0)
+            db.add(wallet)
+        else:
+            # Link google_id if not already linked
+            if not user.google_id:
+                user.google_id = google_id
+            if photo_url and not user.photo_url:
+                user.photo_url = photo_url
+            user.last_login_at = datetime.utcnow()
+
+        await db.commit()
+        await db.refresh(user)
+        wallet = await AuthService._ensure_wallet(db, user)
+
+        logger.info("User authenticated via Google", email=email, is_new=is_new_user)
+        return AuthService._build_auth_response(user, wallet, is_new_user=is_new_user)

@@ -22,14 +22,18 @@ def _get_engine():
     """Lazy initialization of database engine."""
     global engine
     if engine is None:
-        engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=settings.SQLALCHEMY_ECHO,
-            future=True,
-            pool_pre_ping=True,  # Test connections before using them
-            pool_size=20,  # Connection pool size
-            max_overflow=10,  # Maximum overflow connections
-        )
+        engine_kwargs = {
+            "echo": settings.SQLALCHEMY_ECHO,
+            "future": True,
+        }
+        
+        # SQLite doesn't support these connection pool arguments
+        if not settings.DATABASE_URL.startswith("sqlite"):
+            engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["pool_size"] = 20
+            engine_kwargs["max_overflow"] = 10
+            
+        engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
     return engine
 
 # Create async session factory

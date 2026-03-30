@@ -57,6 +57,7 @@ class Settings(BaseSettings):
 
     # External APIs
     GOOGLE_MAPS_API_KEY: Optional[str] = Field(default=None)
+    GOOGLE_CLIENT_ID: Optional[str] = Field(default=None, description="Google OAuth 2.0 Client ID")
     PAYSTACK_PUBLIC_KEY: Optional[str] = Field(default=None)
     PAYSTACK_SECRET_KEY: Optional[str] = Field(default=None)
 

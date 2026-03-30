@@ -40,11 +40,15 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    phone_number: Mapped[str] = mapped_column(sa.String(20), unique=True, index=True, nullable=False)
+    phone_number: Mapped[str | None] = mapped_column(sa.String(20), unique=True, index=True, nullable=True)
     first_name: Mapped[str] = mapped_column(sa.String(100), default="", nullable=False)
     last_name: Mapped[str] = mapped_column(sa.String(100), default="", nullable=False)
     email: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    
+    # Password / OAuth auth
+    password_hash: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    google_id: Mapped[str | None] = mapped_column(sa.String(255), unique=True, nullable=True)
     
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole), default=UserRole.PASSENGER, nullable=False
@@ -132,26 +136,7 @@ class User(Base):
         return f"<User(id={self.id}, phone={self.phone_number}, role={self.role})>"
 
 
-class OTP(Base):
-    """
-    OTP (One-Time Password) model for phone number verification.
-    """
 
-    __tablename__ = "otps"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    phone_number: Mapped[str] = mapped_column(sa.String(20), index=True, nullable=False)
-    otp_code: Mapped[str] = mapped_column(sa.String(6), nullable=False)
-    attempts: Mapped[int] = mapped_column(default=0, nullable=False)
-    is_used: Mapped[bool] = mapped_column(default=False, nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, nullable=False
-    )
-    expires_at: Mapped[datetime] = mapped_column(nullable=False, index=True)
-
-    def __repr__(self) -> str:
-        return f"<OTP(phone={self.phone_number}, used={self.is_used})>"
 
 
 class JWTBlacklist(Base):

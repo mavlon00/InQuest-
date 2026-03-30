@@ -9,6 +9,29 @@ from typing import Optional
 from datetime import datetime
 
 
+class EmailRegisterRequest(BaseModel):
+    """Register a new user with email and password."""
+    email: str = Field(..., description="User's email address")
+    password: str = Field(..., min_length=8, description="Password (min 8 characters)")
+    first_name: str = Field(..., min_length=2, max_length=100, description="First name")
+    last_name: str = Field(..., min_length=2, max_length=100, description="Last name")
+    role: str = Field(default="Passenger", description="User role: Passenger or Driver")
+    referral_code: Optional[str] = Field(None, description="Optional referral code (passengers only)")
+
+
+class EmailLoginRequest(BaseModel):
+    """Login with email and password."""
+    email: str = Field(..., description="User's email address")
+    password: str = Field(..., description="User's password")
+
+
+class GoogleAuthRequest(BaseModel):
+    """Authenticate with Google OAuth token."""
+    id_token: str = Field(..., description="Google ID token from frontend")
+    role: str = Field(default="Passenger", description="User role: Passenger or Driver")
+    referral_code: Optional[str] = Field(None, description="Optional referral code (passengers only)")
+
+
 class RegisterRequest(BaseModel):
     """
     Request body for POST /api/v1/auth/register

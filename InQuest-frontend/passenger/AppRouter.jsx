@@ -4,11 +4,9 @@ import { useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 // Pages
-import Landing from './pages/Landing';
 import Splash from './pages/Splash';
 import Onboarding from './pages/Onboarding';
 import Register from './pages/Register';
-import VerifyOTP from './pages/VerifyOTP';
 import ProfileSetup from './pages/ProfileSetup';
 import Home from './pages/Home';
 import OnSpotBooking from './pages/book/OnSpotBooking';
@@ -163,13 +161,12 @@ export default function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route element={<GlobalLayout />}>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<Navigate to="/splash" replace />} />
           <Route path="/splash" element={<Splash />} />
 
           <Route element={<PublicRoute />}>
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/verify-otp" element={<VerifyOTP />} />
           </Route>
 
           <Route element={<ProtectedRoute />}>
